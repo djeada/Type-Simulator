@@ -22,11 +22,19 @@ TypeSimulator can be run from the command line. There are several options availa
 
 To type the contents of a file with a custom typing speed:
 
-`python typesimulator.py -f path/to/file.txt -s 0.1 -v 0.02`
+```
+python type_simulator.py -f path/to/file.txt -s 0.1 -v 0.02
+```
+
+![Peek 2024-03-02 20-55](https://github.com/djeada/Type-Simulator/assets/37275728/7d33a6a9-7502-4889-b19d-41aca85837a8)
 
 To type a direct text input:
 
-`python typesimulator.py "Hello, this is TypeSimulator!"`
+```
+python type_simulator.py 'echo "Hello, this is TypeSimulator!" > temp.txt'
+```
+
+![Peek 2024-03-02 20-53](https://github.com/djeada/Type-Simulator/assets/37275728/e0f4ea67-e8d7-498a-82f3-439867457f6b)
 
 ## Customizing TypeSimulator
 
