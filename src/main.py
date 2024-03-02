@@ -11,10 +11,10 @@ if __name__ == "__main__":
     args = parser.parse()
 
     simulator = TypeSimulator(
-        editor_script=args.editor_script,
-        file=args.file,
+        editor_script_path=args.editor_script,
+        file_path=args.file,
         text=args.text,
-        speed=args.speed,
-        variance=args.variance,
+        typing_speed=args.speed,
+        typing_variance=args.variance,
     )
     simulator.run()
