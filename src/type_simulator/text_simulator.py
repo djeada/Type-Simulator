@@ -22,8 +22,24 @@ class TextSimulator:
                     duration, i = self._extract_wait_duration(i)
                     self._wait_for_duration(duration)
                 else:
-                    special_key, i = self._extract_special_key(i)
-                    pyautogui.press(self.special_keys.get(special_key, special_key))
+                    # Check if it's a special key
+                    end_index = self.text.find("}", i)
+                    if end_index == -1:
+                        raise ValueError("Unmatched '{' in text.")
+                    possible_special_key = self.text[i : end_index + 1]
+                    if possible_special_key in self.special_keys:
+                        # Handle special key
+                        pyautogui.press(self.special_keys[possible_special_key])
+                        i = end_index + 1
+                    else:
+                        # Process unrecognized text character by character
+                        while i < end_index:
+                            pyautogui.write(
+                                self.text[i],
+                                interval=self.typing_speed
+                                + random.uniform(0, self.typing_variance),
+                            )
+                            i += 1
             elif char == "\n":
                 pyautogui.press("enter")
                 i += 1
