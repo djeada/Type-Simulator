@@ -1,8 +1,7 @@
 import logging
 
 from src.parser import TypeSimulatorParser
-from src.type_simulator import TypeSimulator
-
+from src.type_simulator.type_simulator import TypeSimulator
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
