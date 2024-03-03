@@ -61,8 +61,12 @@ class TypeSimulator:
         i = 0
         while i < len(self.text):
             if self.text[i] == "{":
-                special_key, i = self._extract_special_key(i)
-                pyautogui.press(special_keys.get(special_key, special_key))
+                if self.text.startswith("{WAIT_", i):
+                    duration, i = self._extract_wait_duration(i)
+                    self.wait_for_duration(duration)
+                else:
+                    special_key, i = self._extract_special_key(i)
+                    pyautogui.press(special_keys.get(special_key, special_key))
             elif self.text[i] == "\n":
                 pyautogui.press("enter")
                 i += 1
@@ -78,6 +82,18 @@ class TypeSimulator:
                     )
                 )
                 i += 1
+
+    def _extract_wait_duration(self, start_index: int) -> (float, int):
+        end_index = self.text.find("}", start_index)
+        if end_index == -1:
+            raise ValueError("Unmatched '{' in text.")
+
+        wait_sequence = self.text[start_index + 6:end_index]  # Skip past '{WAIT_'
+        duration = float(wait_sequence)
+        return duration, end_index + 1
+
+    def wait_for_duration(self, duration: float):
+        time.sleep(duration)
 
     def _get_special_keys(self) -> Dict[str, str]:
         return {
