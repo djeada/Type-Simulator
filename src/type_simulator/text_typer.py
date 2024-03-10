@@ -1,9 +1,12 @@
 import random
 import shlex
 import subprocess
+import sys
 import time
 
 import pyautogui
+
+from src.utils.utils import is_program_installed, install_instructions
 
 
 class TextTyper:
@@ -62,14 +65,40 @@ class TextTyper:
                 )
                 i += 1
 
-    def _copy_paste(self, char: str) -> None:
-        # Safely quote the character to be echoed
-        safe_char = shlex.quote(char)
-        # Build the command
-        command = f"echo -n {safe_char} | xclip -selection clipboard"  # TODO: make it configurable
-        # Execute the command
-        subprocess.run(command, shell=True)
-        pyautogui.hotkey("ctrl", "shift", "v")  # TODO: make it configurable
+    def _copy_paste(
+        self,
+        char: str,
+        clipboard_command: str = "xclip -selection clipboard",
+        hotkey_sequence: tuple = ("ctrl", "shift", "v"),
+    ):
+        # Check if required programs are installed
+        for program in ["xclip"]:
+            if not is_program_installed(program):
+                raise SystemExit(
+                    f"Required program '{program}' is not installed. {install_instructions(program)}"
+                )
+
+        try:
+            # Safely quote the character to be echoed
+            safe_char = shlex.quote(char)
+            # Build and execute the command
+            command = f"echo -n {safe_char} | {clipboard_command}"
+            result = subprocess.run(command, shell=True, check=True)
+
+            # Check for successful execution
+            if result.returncode != 0:
+                raise subprocess.SubprocessError(
+                    f"Command execution failed with return code {result.returncode}."
+                )
+
+            # Perform the hotkey action
+            import pyautogui
+
+            pyautogui.hotkey(*hotkey_sequence)
+        except Exception as e:
+            # Handle any exception that occurred during execution
+            sys.stderr.write(f"An error occurred: {str(e)}\n")
+            raise
 
     def _get_special_keys(self) -> dict:
         return {"{ESC}": "esc", "{ALT}": "alt", "{CTRL}": "ctrl"}
