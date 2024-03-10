@@ -1,10 +1,12 @@
 import random
+import shlex
+import subprocess
 import time
 
 import pyautogui
 
 
-class TextSimulator:
+class TextTyper:
     def __init__(
         self, text: str, typing_speed: float = 0.05, typing_variance: float = 0.05
     ):
@@ -17,7 +19,11 @@ class TextSimulator:
         i = 0
         while i < len(self.text):
             char = self.text[i]
-            if char == "{":
+            if char in ["<", ">"]:  # TODO: make it configurable
+                self._copy_paste(char)
+                time.sleep(self.typing_speed)
+                i += 1
+            elif char == "{":
                 if self.text.startswith("{WAIT_", i):
                     duration, i = self._extract_wait_duration(i)
                     self._wait_for_duration(duration)
@@ -55,6 +61,15 @@ class TextSimulator:
                     )
                 )
                 i += 1
+
+    def _copy_paste(self, char: str) -> None:
+        # Safely quote the character to be echoed
+        safe_char = shlex.quote(char)
+        # Build the command
+        command = f"echo -n {safe_char} | xclip -selection clipboard"  # TODO: make it configurable
+        # Execute the command
+        subprocess.run(command, shell=True)
+        pyautogui.hotkey("ctrl", "shift", "v")  # TODO: make it configurable
 
     def _get_special_keys(self) -> dict:
         return {"{ESC}": "esc", "{ALT}": "alt", "{CTRL}": "ctrl"}

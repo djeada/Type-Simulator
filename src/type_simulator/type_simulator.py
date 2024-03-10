@@ -6,7 +6,7 @@ import pyautogui
 
 from src.type_simulator.editor_manager import EditorManager
 from src.type_simulator.file_manager import FileManager
-from src.type_simulator.text_simulator import TextSimulator
+from src.type_simulator.text_typer import TextTyper
 
 
 class TypeSimulator:
@@ -22,7 +22,7 @@ class TypeSimulator:
         self.editor_manager = EditorManager(editor_script_path)
         self.file_manager = FileManager(file_path)
         self.text = text
-        self.text_simulator = TextSimulator(text, typing_speed, typing_variance)
+        self.text_simulator = TextTyper(text, typing_speed, typing_variance)
 
     def run(self):
         try:
