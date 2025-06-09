@@ -45,22 +45,35 @@ class TypeSimulator:
         wait: float = 0.0,
         **kwargs,
     ):
-        # Determine editor_script_path and file_path from args or kwargs
-        if args and isinstance(args[0], str) and 'editor_script_path' in kwargs:
-            editor_script_path = args[0]
-            file_path = kwargs.get('file_path') or (args[1] if len(args) > 1 else None)
-            text = kwargs.get('text') or (args[2] if len(args) > 2 else None)
-            mode = kwargs.get('mode', mode)
-            editor_cmd = editor_script_path
-        else:
-            file_path = args[0] if args else kwargs.get('file_path')
-            text = args[1] if len(args) > 1 else kwargs.get('text')
+        # Unpack arguments for backward and forward compatibility
+        # Priority: explicit keyword > positional > None
+        file_path = None
+        text = None
+        # Handle legacy signature: (editor_script_path, file_path, text, ...)
+        if args:
+            if len(args) == 3:
+                # (editor_script_path, file_path, text)
+                editor_script_path, file_path, text = args
+                if not editor_cmd:
+                    editor_cmd = editor_script_path
+            elif len(args) == 2:
+                # (file_path, text)
+                file_path, text = args
+            elif len(args) == 1:
+                file_path = args[0]
+        # Allow keyword overrides
+        file_path = kwargs.get('file_path', file_path)
+        text = kwargs.get('text', text)
+        if 'editor_script_path' in kwargs and not editor_cmd:
+            editor_cmd = kwargs['editor_script_path']
+        if 'editor_cmd' in kwargs and not editor_cmd:
+            editor_cmd = kwargs['editor_cmd']
 
         # Setup logging
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.debug(
-            "Initialized with file_path=%s, mode=%s, wait=%s",
-            file_path, mode, wait
+            "Initialized with file_path=%s, mode=%s, wait=%s, editor_cmd=%s",
+            file_path, mode, wait, editor_cmd
         )
 
         self.mode = mode
@@ -70,9 +83,13 @@ class TypeSimulator:
         self.texter = TextTyper(text, typing_speed, typing_variance)
 
         if mode in (Mode.GUI, Mode.TERMINAL):
-            cmd = editor_cmd or (
-                "xterm -fa 'Monospace' -fs 10 -e vi" if mode == Mode.GUI else "xterm -e bash"
-            )
+            # Always honor explicit editor_cmd if provided
+            if editor_cmd:
+                cmd = editor_cmd
+            else:
+                cmd = (
+                    "xterm -fa 'Monospace' -fs 10 -e vi" if mode == Mode.GUI else "xterm -e bash"
+                )
             self.editor_manager = EditorManager(cmd)
         else:
             self.editor_manager = None
@@ -135,12 +152,45 @@ class TypeSimulator:
             )
             time.sleep(self.wait)
 
-        if self.mode == Mode.GUI:
-            self.logger.debug("Saving and quitting editor")
-            pyautogui.press("esc")
-            pyautogui.typewrite(":wq\n", interval=0.02)
-        self.logger.debug("Waiting for editor to exit")
-        proc.wait(timeout=10)
+        closing_done = False
+        if self.mode == Mode.GUI and self.editor_manager:
+            # Try to detect the editor and send the right closing sequence
+            editor_cmd = self.editor_manager.editor_cmd.lower()
+            self.logger.debug(f"Attempting to close editor: {editor_cmd}")
+            if any(e in editor_cmd for e in ["vim", "vi"]):
+                self.logger.debug("Saving and quitting vim/vi")
+                pyautogui.press("esc")
+                pyautogui.typewrite(":wq\n", interval=0.02)
+                closing_done = True
+            elif "nano" in editor_cmd:
+                self.logger.debug("Saving and quitting nano")
+                pyautogui.hotkey("ctrl", "x")
+                time.sleep(0.2)
+                pyautogui.press("y")
+                time.sleep(0.1)
+                pyautogui.press("enter")
+                closing_done = True
+            # Add more editors here as needed
+            # For unknown editors, do not attempt to close automatically
+            if not closing_done:
+                self.logger.debug("No automatic closing sequence for this editor; leaving open.")
+
+        # Calculate a dynamic timeout based on text length and typing speed
+        min_timeout = 10
+        max_timeout = 120
+        text_length = len(self.text) if self.text else 0
+        word_count = len(self.text.split()) if self.text else 0
+        # Estimate: each character takes typing_speed + variance/2 on average
+        avg_char_time = getattr(self.texter, 'typing_speed', 0.15) + getattr(self.texter, 'typing_variance', 0.05) / 2
+        estimated_typing_time = text_length * avg_char_time
+        # Add a buffer for editor startup/closing
+        buffer_time = 5
+        timeout = min(max(int(estimated_typing_time + buffer_time), min_timeout), max_timeout)
+        self.logger.debug(f"Waiting for editor to exit (timeout={timeout}s, text_length={text_length}, avg_char_time={avg_char_time:.3f})")
+        try:
+            proc.wait(timeout=timeout)
+        except Exception as e:
+            self.logger.warning(f"Editor did not exit in time: {e}")
         self.logger.debug(
             "Editor exited with code %s", proc.returncode
         )
