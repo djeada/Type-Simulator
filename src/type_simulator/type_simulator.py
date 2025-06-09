@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # src/type_simulator/type_simulator.py
 import logging
 import sys
@@ -31,7 +32,7 @@ class TypeSimulator:
     Backwards-compatible signature supports:
       TypeSimulator(editor_script_path, file_path, text, speed, variance)
     or the new:
-      TypeSimulator(file_path, text, mode, editor_cmd, speed, variance).
+      TypeSimulator(file_path, text, mode, editor_cmd, speed, variance, wait)
     """
 
     def __init__(
@@ -41,26 +42,29 @@ class TypeSimulator:
         editor_cmd: Optional[str] = None,
         typing_speed: float = 0.05,
         typing_variance: float = 0.05,
+        wait: float = 0.0,
         **kwargs,
     ):
         # Determine editor_script_path and file_path from args or kwargs
         if args and isinstance(args[0], str) and 'editor_script_path' in kwargs:
-            # Old signature: (editor_script_path, file_path, text, speed, variance)
             editor_script_path = args[0]
             file_path = kwargs.get('file_path') or (args[1] if len(args) > 1 else None)
             text = kwargs.get('text') or (args[2] if len(args) > 2 else None)
             mode = kwargs.get('mode', mode)
             editor_cmd = editor_script_path
         else:
-            # New signature: first positional is file_path
             file_path = args[0] if args else kwargs.get('file_path')
             text = args[1] if len(args) > 1 else kwargs.get('text')
 
         # Setup logging
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.debug("Initialized with file_path=%s, mode=%s", file_path, mode)
+        self.logger.debug(
+            "Initialized with file_path=%s, mode=%s, wait=%s",
+            file_path, mode, wait
+        )
 
         self.mode = mode
+        self.wait = wait
         self.file_manager = FileManager(str(file_path))
         self.text = text
         self.texter = TextTyper(text, typing_speed, typing_variance)
@@ -124,6 +128,13 @@ class TypeSimulator:
         self.texter.simulate_typing()
 
     def _finalize(self, proc: subprocess.Popen) -> None:
+        # wait before closing editor
+        if self.wait and self.wait > 0:
+            self.logger.debug(
+                "Waiting %s seconds before closing editor", self.wait
+            )
+            time.sleep(self.wait)
+
         if self.mode == Mode.GUI:
             self.logger.debug("Saving and quitting editor")
             pyautogui.press("esc")
@@ -133,4 +144,5 @@ class TypeSimulator:
         self.logger.debug(
             "Editor exited with code %s", proc.returncode
         )
+        # post-exit pause for stability (retain small delay)
         time.sleep(0.5)
