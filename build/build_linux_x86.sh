@@ -41,7 +41,7 @@ if [[ -f "$REQ_FILE" ]]; then
     fi
   done < <(grep -vE '^\s*#' "$REQ_FILE" | sed '/^\s*$/d' | cut -d'=' -f1)
 
-  if [[ "$missing" -ne 0 ]]; then
+  if [[ $missing -ne 0 ]]; then
     echo "One or more dependencies are missing. Install with: pip install -r $REQ_FILE"
     exit 1
   fi
