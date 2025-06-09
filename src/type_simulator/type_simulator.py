@@ -175,9 +175,20 @@ class TypeSimulator:
             if not closing_done:
                 self.logger.debug("No automatic closing sequence for this editor; leaving open.")
 
-        self.logger.debug("Waiting for editor to exit")
+        # Calculate a dynamic timeout based on text length and typing speed
+        min_timeout = 10
+        max_timeout = 120
+        text_length = len(self.text) if self.text else 0
+        word_count = len(self.text.split()) if self.text else 0
+        # Estimate: each character takes typing_speed + variance/2 on average
+        avg_char_time = getattr(self.texter, 'typing_speed', 0.15) + getattr(self.texter, 'typing_variance', 0.05) / 2
+        estimated_typing_time = text_length * avg_char_time
+        # Add a buffer for editor startup/closing
+        buffer_time = 5
+        timeout = min(max(int(estimated_typing_time + buffer_time), min_timeout), max_timeout)
+        self.logger.debug(f"Waiting for editor to exit (timeout={timeout}s, text_length={text_length}, avg_char_time={avg_char_time:.3f})")
         try:
-            proc.wait(timeout=10)
+            proc.wait(timeout=timeout)
         except Exception as e:
             self.logger.warning(f"Editor did not exit in time: {e}")
         self.logger.debug(
