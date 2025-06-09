@@ -1,0 +1,6 @@
+{
+  "name": "basic-hello",
+  "text": "Hello, E2E test!\nThis is a minimal check.",
+  "expected": "Hello, E2E test!\nThis is a minimal check.",
+  "editor": "vi"
+}

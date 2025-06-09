@@ -5,6 +5,7 @@ import shutil
 import sys
 import time
 import pexpect
+import json
 
 TEST_TEXT = "Hello, E2E test!\nThis is a minimal check."
 
@@ -27,43 +28,66 @@ def run_vi_with_typing(test_text, test_file):
     print("[E2E] vi session complete.")
 
 
+def load_test_cases(cases_dir):
+    cases = []
+    for fname in os.listdir(cases_dir):
+        if fname.endswith('.json'):
+            with open(os.path.join(cases_dir, fname), 'r') as f:
+                cases.append(json.load(f))
+    return cases
+
+
+def run_editor_with_typing(editor, test_text, test_file):
+    if editor == 'vi':
+        run_vi_with_typing(test_text, test_file)
+    else:
+        raise NotImplementedError(f"Editor '{editor}' not supported yet.")
+
+
 def main():
-    temp_dir = tempfile.mkdtemp()
-    try:
-        test_file = os.path.join(temp_dir, 'test.txt')
-        expected_file = os.path.join(temp_dir, 'expected.txt')
-        with open(expected_file, 'w') as f:
-            f.write(TEST_TEXT + '\n')
-
-        run_vi_with_typing(TEST_TEXT, test_file)
-
-        # Compare files (ignore trailing blank lines)
-        print('[E2E] Comparing files...')
-        with open(test_file, 'r') as tf, open(expected_file, 'r') as ef:
-            test_lines = [line.rstrip() for line in tf.readlines()]
-            expected_lines = [line.rstrip() for line in ef.readlines()]
-            # Remove trailing blank lines
-            while test_lines and test_lines[-1] == '':
-                test_lines.pop()
-            while expected_lines and expected_lines[-1] == '':
-                expected_lines.pop()
-            print('--- test.txt ---')
-            print('\n'.join(test_lines))
-            print('--- expected.txt ---')
-            print('\n'.join(expected_lines))
-        if test_lines == expected_lines:
-            print('[E2E] PASS: Files match (ignoring trailing blank lines).')
-            sys.exit(0)
-        else:
-            print('[E2E] FAIL: Files differ (ignoring trailing blank lines).')
-            for i, (a, b) in enumerate(zip(expected_lines, test_lines)):
-                if a != b:
-                    print(f'Line {i+1} differs: expected: {a!r}, got: {b!r}')
-            if len(expected_lines) != len(test_lines):
-                print(f'File lengths differ: expected {len(expected_lines)} lines, got {len(test_lines)} lines')
-            sys.exit(1)
-    finally:
-        shutil.rmtree(temp_dir)
+    cases_dir = os.path.join(os.path.dirname(__file__), 'cases')
+    cases = load_test_cases(cases_dir)
+    all_passed = True
+    for case in cases:
+        print(f"\n=== Running E2E case: {case['name']} ===")
+        temp_dir = tempfile.mkdtemp()
+        try:
+            test_file = os.path.join(temp_dir, 'test.txt')
+            expected_file = os.path.join(temp_dir, 'expected.txt')
+            with open(expected_file, 'w') as f:
+                f.write(case['expected'] + '\n')
+            run_editor_with_typing(case['editor'], case['text'], test_file)
+            # Compare files (ignore trailing blank lines)
+            print('[E2E] Comparing files...')
+            with open(test_file, 'r') as tf, open(expected_file, 'r') as ef:
+                test_lines = [line.rstrip() for line in tf.readlines()]
+                expected_lines = [line.rstrip() for line in ef.readlines()]
+                while test_lines and test_lines[-1] == '':
+                    test_lines.pop()
+                while expected_lines and expected_lines[-1] == '':
+                    expected_lines.pop()
+                print('--- test.txt ---')
+                print('\n'.join(test_lines))
+                print('--- expected.txt ---')
+                print('\n'.join(expected_lines))
+            if test_lines == expected_lines:
+                print(f"[E2E] PASS: {case['name']} (ignoring trailing blank lines).")
+            else:
+                print(f"[E2E] FAIL: {case['name']} (ignoring trailing blank lines).")
+                for i, (a, b) in enumerate(zip(expected_lines, test_lines)):
+                    if a != b:
+                        print(f'Line {i+1} differs: expected: {a!r}, got: {b!r}')
+                if len(expected_lines) != len(test_lines):
+                    print(f'File lengths differ: expected {len(expected_lines)} lines, got {len(test_lines)} lines')
+                all_passed = False
+        finally:
+            shutil.rmtree(temp_dir)
+    if all_passed:
+        print("\nALL E2E TESTS PASSED")
+        sys.exit(0)
+    else:
+        print("\nSOME E2E TESTS FAILED")
+        sys.exit(1)
 
 
 if __name__ == '__main__':
