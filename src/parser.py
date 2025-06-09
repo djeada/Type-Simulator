@@ -1,5 +1,5 @@
+# src/parser.py
 import argparse
-
 
 class TypeSimulatorParser(argparse.ArgumentParser):
     def __init__(self):
@@ -11,7 +11,10 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             default=None,
         )
         self.add_argument(
-            "-f", "--file", help="Path to the text file to type", default=None
+            "-f",
+            "--file",
+            help="Path to the text file to type",
+            default=None,
         )
         self.add_argument(
             "-s",
@@ -21,9 +24,25 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             default=0.15,
         )
         self.add_argument(
-            "-v", "--variance", help="Typing speed variance", type=float, default=0.05
+            "-v",
+            "--variance",
+            help="Typing speed variance",
+            type=float,
+            default=0.05,
         )
-        self.add_argument("text", nargs="?", help="Text to type directly", default=None)
+        self.add_argument(
+            "-m",
+            "--window-mode",
+            choices=["gui", "headless"],
+            default="gui",
+            help="Whether to launch a real GUI editor or headless (for E2E tests)",
+        )
+        self.add_argument(
+            "text",
+            nargs="?",
+            help="Text to type directly",
+            default=None,
+        )
 
     def parse(self):
         return self.parse_args()
