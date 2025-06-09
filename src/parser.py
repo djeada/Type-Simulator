@@ -6,8 +6,8 @@ class TypeSimulatorParser(argparse.ArgumentParser):
         super().__init__(description="Simulate human-like typing in an editor.")
         self.add_argument(
             "-e", "--editor-script",
-            help="Path to the editor opening script",
-            default=None,
+            help="Editor command or script (defaults to 'vi')",
+            default="vi",
         )
         self.add_argument(
             "-f", "--file",
@@ -25,12 +25,6 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             help="Typing speed variance",
             type=float,
             default=0.05,
-        )
-        self.add_argument(
-            "-m", "--window-mode",
-            choices=["gui", "headless"],
-            default="gui",
-            help="Whether to launch real GUI editor or headless (for E2E tests)",
         )
         self.add_argument(
             "-t", "--text",
