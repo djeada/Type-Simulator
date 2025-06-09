@@ -152,12 +152,34 @@ class TypeSimulator:
             )
             time.sleep(self.wait)
 
-        if self.mode == Mode.GUI:
-            self.logger.debug("Saving and quitting editor")
-            pyautogui.press("esc")
-            pyautogui.typewrite(":wq\n", interval=0.02)
+        closing_done = False
+        if self.mode == Mode.GUI and self.editor_manager:
+            # Try to detect the editor and send the right closing sequence
+            editor_cmd = self.editor_manager.editor_cmd.lower()
+            self.logger.debug(f"Attempting to close editor: {editor_cmd}")
+            if any(e in editor_cmd for e in ["vim", "vi"]):
+                self.logger.debug("Saving and quitting vim/vi")
+                pyautogui.press("esc")
+                pyautogui.typewrite(":wq\n", interval=0.02)
+                closing_done = True
+            elif "nano" in editor_cmd:
+                self.logger.debug("Saving and quitting nano")
+                pyautogui.hotkey("ctrl", "x")
+                time.sleep(0.2)
+                pyautogui.press("y")
+                time.sleep(0.1)
+                pyautogui.press("enter")
+                closing_done = True
+            # Add more editors here as needed
+            # For unknown editors, do not attempt to close automatically
+            if not closing_done:
+                self.logger.debug("No automatic closing sequence for this editor; leaving open.")
+
         self.logger.debug("Waiting for editor to exit")
-        proc.wait(timeout=10)
+        try:
+            proc.wait(timeout=10)
+        except Exception as e:
+            self.logger.warning(f"Editor did not exit in time: {e}")
         self.logger.debug(
             "Editor exited with code %s", proc.returncode
         )
