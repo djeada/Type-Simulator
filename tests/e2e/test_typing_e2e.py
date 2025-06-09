@@ -1,87 +1,84 @@
+# tests/e2e/test_typing_e2e.py
 import os
 import subprocess
 import tempfile
 import shutil
 import sys
-import time
-import pexpect
 import json
 
-TEST_TEXT = "Hello, E2E test!\nThis is a minimal check."
-
-EDITOR_TIMEOUT = 30  # seconds
-TYPER_TIMEOUT = 30   # seconds
-
-
-def run_vi_with_typing(test_text, test_file):
-    print(f"[E2E] Launching vi on {test_file} with pexpect...")
-    child = pexpect.spawn(f"vi {test_file}", timeout=EDITOR_TIMEOUT)
-    time.sleep(1)  # Give vi time to start
-    child.send("i")  # Enter insert mode
-    time.sleep(0.5)
-    child.send(test_text)
-    time.sleep(0.5)
-    child.send("\x1b")  # ESC to exit insert mode
-    time.sleep(0.5)
-    child.send(":wq\r")  # :wq + Enter
-    child.expect(pexpect.EOF)
-    print("[E2E] vi session complete.")
-
+TEST_SPEED = 0
+TEST_VARIANCE = 0
+TIMEOUT = 30  # seconds
 
 def load_test_cases(cases_dir):
     cases = []
     for fname in os.listdir(cases_dir):
-        if fname.endswith('.json'):
-            with open(os.path.join(cases_dir, fname), 'r') as f:
+        if fname.endswith(".json"):
+            with open(os.path.join(cases_dir, fname), "r") as f:
                 cases.append(json.load(f))
     return cases
 
-
-def run_editor_with_typing(editor, test_text, test_file):
-    if editor == 'vi':
-        run_vi_with_typing(test_text, test_file)
-    else:
-        raise NotImplementedError(f"Editor '{editor}' not supported yet.")
-
-
 def main():
-    cases_dir = os.path.join(os.path.dirname(__file__), 'cases')
+    cases_dir = os.path.join(os.path.dirname(__file__), "cases")
     cases = load_test_cases(cases_dir)
     all_passed = True
+
     for case in cases:
         print(f"\n=== Running E2E case: {case['name']} ===")
         temp_dir = tempfile.mkdtemp()
         try:
-            test_file = os.path.join(temp_dir, 'test.txt')
-            expected_file = os.path.join(temp_dir, 'expected.txt')
-            with open(expected_file, 'w') as f:
-                f.write(case['expected'] + '\n')
-            run_editor_with_typing(case['editor'], case['text'], test_file)
+            test_file = os.path.join(temp_dir, "test.txt")
+            expected_file = os.path.join(temp_dir, "expected.txt")
+            with open(expected_file, "w") as f:
+                f.write(case["expected"] + "\n")
+
+            # build the command to run under a throw-away X server
+            cmd = [
+                sys.executable, "-m", "src.main",
+                "--window-mode", "gui",
+                "--file", test_file,
+                "--text", case["text"],
+                "--speed", str(case.get("speed", TEST_SPEED)),
+                "--variance", str(case.get("variance", TEST_VARIANCE)),
+            ]
+            full_cmd = [
+                "xvfb-run",
+                "--auto-servernum",
+                "--server-args=-screen 0 1024x768x16 -ac",
+            ] + cmd
+
+            print(f"[E2E] Running: {' '.join(full_cmd)}")
+            subprocess.run(full_cmd, timeout=TIMEOUT, check=True)
+
             # Compare files (ignore trailing blank lines)
-            print('[E2E] Comparing files...')
-            with open(test_file, 'r') as tf, open(expected_file, 'r') as ef:
-                test_lines = [line.rstrip() for line in tf.readlines()]
-                expected_lines = [line.rstrip() for line in ef.readlines()]
-                while test_lines and test_lines[-1] == '':
+            print("[E2E] Comparing files...")
+            with open(test_file, "r") as tf, open(expected_file, "r") as ef:
+                test_lines = [line.rstrip() for line in tf]
+                expected_lines = [line.rstrip() for line in ef]
+                while test_lines and test_lines[-1] == "":
                     test_lines.pop()
-                while expected_lines and expected_lines[-1] == '':
+                while expected_lines and expected_lines[-1] == "":
                     expected_lines.pop()
-                print('--- test.txt ---')
-                print('\n'.join(test_lines))
-                print('--- expected.txt ---')
-                print('\n'.join(expected_lines))
+
+                print("--- test.txt ---")
+                print("\n".join(test_lines))
+                print("--- expected.txt ---")
+                print("\n".join(expected_lines))
+
             if test_lines == expected_lines:
-                print(f"[E2E] PASS: {case['name']} (ignoring trailing blank lines).")
+                print(f"[E2E] PASS: {case['name']}")
             else:
-                print(f"[E2E] FAIL: {case['name']} (ignoring trailing blank lines).")
-                for i, (a, b) in enumerate(zip(expected_lines, test_lines)):
-                    if a != b:
-                        print(f'Line {i+1} differs: expected: {a!r}, got: {b!r}')
+                print(f"[E2E] FAIL: {case['name']}")
+                for i, (exp, got) in enumerate(zip(expected_lines, test_lines), start=1):
+                    if exp != got:
+                        print(f"Line {i} differs: expected {exp!r}, got {got!r}")
                 if len(expected_lines) != len(test_lines):
-                    print(f'File lengths differ: expected {len(expected_lines)} lines, got {len(test_lines)} lines')
+                    print(f"Length mismatch: expected {len(expected_lines)} lines, got {len(test_lines)} lines")
                 all_passed = False
+
         finally:
             shutil.rmtree(temp_dir)
+
     if all_passed:
         print("\nALL E2E TESTS PASSED")
         sys.exit(0)
@@ -89,6 +86,5 @@ def main():
         print("\nSOME E2E TESTS FAILED")
         sys.exit(1)
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
