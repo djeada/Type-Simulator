@@ -29,8 +29,7 @@ jobs:
           pip install -r requirements.txt
           pip install pexpect
 
-      - name: Run E2E test with Xvfb
+      - name: Run E2E test under Xvfb
         run: |
-          Xvfb :99 -screen 0 1024x768x16 &
-          export DISPLAY=:99
-          python3 tests/e2e/test_typing_e2e.py
+          xvfb-run --auto-servernum --server-args='-screen 0 1024x768x16 -ac' \
+            python3 -m pytest tests/e2e
