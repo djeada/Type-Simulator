@@ -1,13 +1,19 @@
+# src/main.py
+#!/usr/bin/env python3
 import logging
+import sys
 
 from src.parser import TypeSimulatorParser
 from src.type_simulator.type_simulator import TypeSimulator
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
 
+def main():
     parser = TypeSimulatorParser()
     args = parser.parse()
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format="%(asctime)s [%(levelname)s] %(message)s",
+    )
 
     simulator = TypeSimulator(
         editor_script_path=args.editor_script,
@@ -17,3 +23,7 @@ if __name__ == "__main__":
         typing_variance=args.variance,
     )
     simulator.run()
+
+
+if __name__ == "__main__":
+    main()

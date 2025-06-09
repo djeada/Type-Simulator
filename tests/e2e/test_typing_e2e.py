@@ -1,94 +1,93 @@
-import os
-import subprocess
-import tempfile
-import shutil
-import sys
-import time
-import pexpect
 import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import textwrap
+from difflib import unified_diff
+from pathlib import Path
 
-TEST_TEXT = "Hello, E2E test!\nThis is a minimal check."
+import pytest
 
-EDITOR_TIMEOUT = 30  # seconds
-TYPER_TIMEOUT = 30   # seconds
-
-
-def run_vi_with_typing(test_text, test_file):
-    print(f"[E2E] Launching vi on {test_file} with pexpect...")
-    child = pexpect.spawn(f"vi {test_file}", timeout=EDITOR_TIMEOUT)
-    time.sleep(1)  # Give vi time to start
-    child.send("i")  # Enter insert mode
-    time.sleep(0.5)
-    child.send(test_text)
-    time.sleep(0.5)
-    child.send("\x1b")  # ESC to exit insert mode
-    time.sleep(0.5)
-    child.send(":wq\r")  # :wq + Enter
-    child.expect(pexpect.EOF)
-    print("[E2E] vi session complete.")
+TEST_SPEED = 0
+TEST_VARIANCE = 0
+TIMEOUT = 120  # generous, CI can be slow
 
 
-def load_test_cases(cases_dir):
-    cases = []
-    for fname in os.listdir(cases_dir):
-        if fname.endswith('.json'):
-            with open(os.path.join(cases_dir, fname), 'r') as f:
-                cases.append(json.load(f))
-    return cases
+# --------------------------------------------------------------------------- #
+def load_cases(dir_: Path) -> list[dict]:
+    return [
+        json.loads((dir_ / f).read_text())
+        for f in os.listdir(dir_)
+        if f.endswith(".json")
+    ]
 
 
-def run_editor_with_typing(editor, test_text, test_file):
-    if editor == 'vi':
-        run_vi_with_typing(test_text, test_file)
-    else:
-        raise NotImplementedError(f"Editor '{editor}' not supported yet.")
+def pretty_cmd(cmd: list[str]) -> str:
+    return " \\\n    ".join(map(str, cmd))
 
 
-def main():
-    cases_dir = os.path.join(os.path.dirname(__file__), 'cases')
-    cases = load_test_cases(cases_dir)
-    all_passed = True
-    for case in cases:
-        print(f"\n=== Running E2E case: {case['name']} ===")
-        temp_dir = tempfile.mkdtemp()
-        try:
-            test_file = os.path.join(temp_dir, 'test.txt')
-            expected_file = os.path.join(temp_dir, 'expected.txt')
-            with open(expected_file, 'w') as f:
-                f.write(case['expected'] + '\n')
-            run_editor_with_typing(case['editor'], case['text'], test_file)
-            # Compare files (ignore trailing blank lines)
-            print('[E2E] Comparing files...')
-            with open(test_file, 'r') as tf, open(expected_file, 'r') as ef:
-                test_lines = [line.rstrip() for line in tf.readlines()]
-                expected_lines = [line.rstrip() for line in ef.readlines()]
-                while test_lines and test_lines[-1] == '':
-                    test_lines.pop()
-                while expected_lines and expected_lines[-1] == '':
-                    expected_lines.pop()
-                print('--- test.txt ---')
-                print('\n'.join(test_lines))
-                print('--- expected.txt ---')
-                print('\n'.join(expected_lines))
-            if test_lines == expected_lines:
-                print(f"[E2E] PASS: {case['name']} (ignoring trailing blank lines).")
-            else:
-                print(f"[E2E] FAIL: {case['name']} (ignoring trailing blank lines).")
-                for i, (a, b) in enumerate(zip(expected_lines, test_lines)):
-                    if a != b:
-                        print(f'Line {i+1} differs: expected: {a!r}, got: {b!r}')
-                if len(expected_lines) != len(test_lines):
-                    print(f'File lengths differ: expected {len(expected_lines)} lines, got {len(test_lines)} lines')
-                all_passed = False
-        finally:
-            shutil.rmtree(temp_dir)
-    if all_passed:
-        print("\nALL E2E TESTS PASSED")
-        sys.exit(0)
-    else:
-        print("\nSOME E2E TESTS FAILED")
-        sys.exit(1)
+def diff(expected: list[str], got: list[str]) -> str:
+    return "\n".join(unified_diff(expected, got, fromfile="expected", tofile="got"))
 
 
-if __name__ == '__main__':
-    main()
+CASES_DIR = Path(__file__).parent / "cases"
+
+
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("case", load_cases(CASES_DIR))
+def test_typing_case(case):
+    tmp_dir = Path(tempfile.mkdtemp())
+    try:
+        test_file = tmp_dir / "test.txt"
+        expected_file = tmp_dir / "expected.txt"
+        expected_file.write_text(case["expected"] + "\n")
+
+        cmd = [
+            sys.executable,
+            "-m",
+            "src.main",
+            "--file",
+            str(test_file),
+            "--text",
+            case["text"],
+            "--speed",
+            str(case.get("speed", TEST_SPEED)),
+            "--variance",
+            str(case.get("variance", TEST_VARIANCE)),
+            "--log-level",
+            "DEBUG",
+        ]
+
+        print("\n" + "=" * 80)
+        print(f"🏷️  CASE: {case['name']}")
+        print("=" * 80)
+        print(textwrap.indent(pretty_cmd(cmd), "🔧 "))
+
+        # Stream child output live
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        for line in proc.stdout:
+            print("│ " + line, end="")
+        proc.wait(timeout=TIMEOUT)
+        assert proc.returncode == 0, "Child process failed"
+
+        # Compare files
+        got_lines = test_file.read_text().rstrip("\n").splitlines()
+        exp_lines = expected_file.read_text().rstrip("\n").splitlines()
+
+        if got_lines != exp_lines:
+            print("❌  Mismatch detected:")
+            print(diff(exp_lines, got_lines))
+        assert got_lines == exp_lines
+
+        print("✅  Case passed.")
+
+    finally:
+        shutil.rmtree(tmp_dir)
