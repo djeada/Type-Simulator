@@ -32,8 +32,8 @@ def main():
             with open(expected_file, "w") as f:
                 f.write(case["expected"] + "\n")
 
-            # build the command to run under a throw-away X server
-            cmd = [
+            # Build the command under a virtual X server
+            base_cmd = [
                 sys.executable, "-m", "src.main",
                 "--window-mode", "gui",
                 "--file", test_file,
@@ -45,13 +45,12 @@ def main():
                 "xvfb-run",
                 "--auto-servernum",
                 "--server-args=-screen 0 1024x768x16 -ac",
-            ] + cmd
+            ] + base_cmd
 
             print(f"[E2E] Running: {' '.join(full_cmd)}")
             subprocess.run(full_cmd, timeout=TIMEOUT, check=True)
 
             # Compare files (ignore trailing blank lines)
-            print("[E2E] Comparing files...")
             with open(test_file, "r") as tf, open(expected_file, "r") as ef:
                 test_lines = [line.rstrip() for line in tf]
                 expected_lines = [line.rstrip() for line in ef]
@@ -59,11 +58,6 @@ def main():
                     test_lines.pop()
                 while expected_lines and expected_lines[-1] == "":
                     expected_lines.pop()
-
-                print("--- test.txt ---")
-                print("\n".join(test_lines))
-                print("--- expected.txt ---")
-                print("\n".join(expected_lines))
 
             if test_lines == expected_lines:
                 print(f"[E2E] PASS: {case['name']}")
