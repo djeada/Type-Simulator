@@ -7,9 +7,12 @@ from src.parser import TypeSimulatorParser
 from src.type_simulator.type_simulator import TypeSimulator
 
 def main():
-    logging.basicConfig(level=logging.INFO)
     parser = TypeSimulatorParser()
     args = parser.parse()
+    logging.basicConfig(
+    level=getattr(logging, args.log_level),
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
     simulator = TypeSimulator(
         editor_script_path=args.editor_script,
