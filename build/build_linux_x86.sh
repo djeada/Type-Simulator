@@ -6,9 +6,16 @@ set -euo pipefail
 
 echo "=== Build Linux x86 Executable with Nuitka ==="
 
-# Default to specified Nuitka command or fall back to nuitka3
-NUITKA_CMD="${1:-nuitka3}"
+# Default to specified Nuitka command or fall back to nuitka, then to nuitka3 if needed
+NUITKA_CMD="${1:-nuitka}"
 shift || true
+
+# If the primary command isn’t available, try the older ‘nuitka3’ wrapper
+if ! command -v "$NUITKA_CMD" &>/dev/null; then
+  echo "[warning] '$NUITKA_CMD' not found, trying 'nuitka3'…"
+  NUITKA_CMD="nuitka3"
+fi
+
 echo "Using Nuitka command: $NUITKA_CMD"
 
 # 1) Verify Nuitka is installed
