@@ -53,6 +53,15 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             default="INFO",
             help="Verbosity of logs (default INFO)",
         )
+        self.add_argument(
+            "-w", "--wait",
+            type=float,
+            default=0.0,
+            help=(
+                "Seconds to wait after typing is done "
+                "and before closing the editor (default: 0)"
+            ),
+        )
 
     def parse(self):
         return self.parse_args()
