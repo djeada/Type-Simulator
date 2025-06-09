@@ -1,33 +1,17 @@
 # src/type_simulator/editor_manager.py
 import subprocess
 import time
-from pathlib import Path
 from typing import Optional
 
-
 class EditorManager:
-    def __init__(
-        self,
-        editor_script_path: Optional[str] = None,
-        mode: str = "gui",  # "gui" or "headless"
-    ):
-        self.mode = mode
-        self.editor_script_path = (
-            Path(editor_script_path).resolve() if editor_script_path else None
-        )
+    def __init__(self, editor_script_path: Optional[str] = "vi"):
+        # editor_script_path can be a command like 'vi' or a path to a script
+        self.editor_cmd = editor_script_path or "vi"
 
-    def open_editor(self):
-        if self.mode == "headless":
-            # headless/mock window for E2E tests
-            from .mock_window import create_headless_window
-
-            create_headless_window()
-            return
-
-        # real GUI mode
-        if not self.editor_script_path or not self.editor_script_path.exists():
-            raise FileNotFoundError(
-                f"Editor script '{self.editor_script_path}' does not exist."
-            )
-        subprocess.Popen([str(self.editor_script_path)])
+    def open_editor(self, file_path: str):
+        # Launch editor with the target file
+        # e.g. ['vi', '/tmp/test.txt'] or ['./my_editor.sh', '/tmp/test.txt']
+        cmd = [self.editor_cmd, file_path]
+        subprocess.Popen(cmd)
+        # give the editor a moment to spin up
         time.sleep(2)
