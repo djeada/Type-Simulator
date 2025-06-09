@@ -21,6 +21,7 @@ def main():
         text=args.text,
         typing_speed=args.speed,
         typing_variance=args.variance,
+        wait=args.wait,
     )
     simulator.run()
 
