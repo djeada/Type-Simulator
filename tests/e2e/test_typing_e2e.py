@@ -32,10 +32,9 @@ def main():
             with open(expected_file, "w") as f:
                 f.write(case["expected"] + "\n")
 
-            # Build the command under a virtual X server
+            # Build the command under a throw-away X server
             base_cmd = [
                 sys.executable, "-m", "src.main",
-                "--window-mode", "gui",
                 "--file", test_file,
                 "--text", case["text"],
                 "--speed", str(case.get("speed", TEST_SPEED)),
