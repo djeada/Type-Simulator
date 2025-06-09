@@ -6,7 +6,7 @@ import sys
 import time
 import pexpect
 
-TEST_TEXT = "Hello, E2E test!\nThis is a minimal check.\n"
+TEST_TEXT = "Hello, E2E test!\nThis is a minimal check."
 
 EDITOR_TIMEOUT = 30  # seconds
 TYPER_TIMEOUT = 30   # seconds
@@ -33,7 +33,7 @@ def main():
         test_file = os.path.join(temp_dir, 'test.txt')
         expected_file = os.path.join(temp_dir, 'expected.txt')
         with open(expected_file, 'w') as f:
-            f.write(TEST_TEXT)
+            f.write(TEST_TEXT + '\n')
 
         run_vi_with_typing(TEST_TEXT, test_file)
 
