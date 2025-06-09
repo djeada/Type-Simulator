@@ -6,7 +6,7 @@ import time
 
 import pyautogui
 
-from src.utils.utils import is_program_installed, install_instructions
+from utils.utils import is_program_installed, install_instructions
 
 
 class TextTyper:

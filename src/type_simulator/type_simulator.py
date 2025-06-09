@@ -10,9 +10,9 @@ from typing import Optional, Union
 
 import pyautogui
 
-from src.type_simulator.editor_manager import EditorManager
-from src.type_simulator.file_manager import FileManager
-from src.type_simulator.text_typer import TextTyper
+from type_simulator.editor_manager import EditorManager
+from type_simulator.file_manager import FileManager
+from type_simulator.text_typer import TextTyper
 
 
 class Mode(Enum):

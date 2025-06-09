@@ -2,9 +2,9 @@
 #!/usr/bin/env python3
 import logging
 import sys
+import os
 
 from src.parser import TypeSimulatorParser
-from src.type_simulator.type_simulator import TypeSimulator
 
 
 def main():
@@ -27,4 +27,8 @@ def main():
 
 
 if __name__ == "__main__":
+    # Patch sys.path for src import compatibility
+    sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+    from type_simulator.type_simulator import TypeSimulator
+
     main()
