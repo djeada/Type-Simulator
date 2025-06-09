@@ -45,22 +45,35 @@ class TypeSimulator:
         wait: float = 0.0,
         **kwargs,
     ):
-        # Determine editor_script_path and file_path from args or kwargs
-        if args and isinstance(args[0], str) and 'editor_script_path' in kwargs:
-            editor_script_path = args[0]
-            file_path = kwargs.get('file_path') or (args[1] if len(args) > 1 else None)
-            text = kwargs.get('text') or (args[2] if len(args) > 2 else None)
-            mode = kwargs.get('mode', mode)
-            editor_cmd = editor_script_path
-        else:
-            file_path = args[0] if args else kwargs.get('file_path')
-            text = args[1] if len(args) > 1 else kwargs.get('text')
+        # Unpack arguments for backward and forward compatibility
+        # Priority: explicit keyword > positional > None
+        file_path = None
+        text = None
+        # Handle legacy signature: (editor_script_path, file_path, text, ...)
+        if args:
+            if len(args) == 3:
+                # (editor_script_path, file_path, text)
+                editor_script_path, file_path, text = args
+                if not editor_cmd:
+                    editor_cmd = editor_script_path
+            elif len(args) == 2:
+                # (file_path, text)
+                file_path, text = args
+            elif len(args) == 1:
+                file_path = args[0]
+        # Allow keyword overrides
+        file_path = kwargs.get('file_path', file_path)
+        text = kwargs.get('text', text)
+        if 'editor_script_path' in kwargs and not editor_cmd:
+            editor_cmd = kwargs['editor_script_path']
+        if 'editor_cmd' in kwargs and not editor_cmd:
+            editor_cmd = kwargs['editor_cmd']
 
         # Setup logging
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.debug(
-            "Initialized with file_path=%s, mode=%s, wait=%s",
-            file_path, mode, wait
+            "Initialized with file_path=%s, mode=%s, wait=%s, editor_cmd=%s",
+            file_path, mode, wait, editor_cmd
         )
 
         self.mode = mode
@@ -70,9 +83,13 @@ class TypeSimulator:
         self.texter = TextTyper(text, typing_speed, typing_variance)
 
         if mode in (Mode.GUI, Mode.TERMINAL):
-            cmd = editor_cmd or (
-                "xterm -fa 'Monospace' -fs 10 -e vi" if mode == Mode.GUI else "xterm -e bash"
-            )
+            # Always honor explicit editor_cmd if provided
+            if editor_cmd:
+                cmd = editor_cmd
+            else:
+                cmd = (
+                    "xterm -fa 'Monospace' -fs 10 -e vi" if mode == Mode.GUI else "xterm -e bash"
+                )
             self.editor_manager = EditorManager(cmd)
         else:
             self.editor_manager = None
