@@ -18,7 +18,9 @@ class EditorManager:
         self.editor_cmd = editor_cmd or self.DEFAULT_CMD
 
     # ------------------------------------------------------------------ #
-    def open_editor(self, file_path) -> subprocess.Popen:  # file_path can be Path or str
+    def open_editor(
+        self, file_path
+    ) -> subprocess.Popen:  # file_path can be Path or str
         # 👉 ensure file_path is str so subprocess + logging don't choke
         cmd = shlex.split(self.editor_cmd) + [str(file_path)]
 

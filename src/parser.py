@@ -17,9 +17,9 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             "-e",
             "--editor-script",
             help="Command used to open the editor "
-                 "(e.g. 'xterm -e vi' or 'gedit'). "
-                 "If omitted, defaults to 'xterm -e vi'.",
-            default=None,          # ← key change: let EditorManager decide
+            "(e.g. 'xterm -e vi' or 'gedit'). "
+            "If omitted, defaults to 'xterm -e vi'.",
+            default=None,  # ← key change: let EditorManager decide
         )
         self.add_argument(
             "-f",
@@ -48,12 +48,11 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             help="Text to type",
         )
         self.add_argument(
-    "--log-level",
-    choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-    default="INFO",
-    help="Verbosity of logs (default INFO)",
-)
-
+            "--log-level",
+            choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+            default="INFO",
+            help="Verbosity of logs (default INFO)",
+        )
 
     def parse(self):
         return self.parse_args()

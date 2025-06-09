@@ -6,13 +6,14 @@ import sys
 from src.parser import TypeSimulatorParser
 from src.type_simulator.type_simulator import TypeSimulator
 
+
 def main():
     parser = TypeSimulatorParser()
     args = parser.parse()
     logging.basicConfig(
-    level=getattr(logging, args.log_level),
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
+        level=getattr(logging, args.log_level),
+        format="%(asctime)s [%(levelname)s] %(message)s",
+    )
 
     simulator = TypeSimulator(
         editor_script_path=args.editor_script,
@@ -22,6 +23,7 @@ def main():
         typing_variance=args.variance,
     )
     simulator.run()
+
 
 if __name__ == "__main__":
     main()
