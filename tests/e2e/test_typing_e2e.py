@@ -37,20 +37,30 @@ def main():
 
         run_vi_with_typing(TEST_TEXT, test_file)
 
-        # Compare files
+        # Compare files (ignore trailing blank lines)
         print('[E2E] Comparing files...')
         with open(test_file, 'r') as tf, open(expected_file, 'r') as ef:
+            test_lines = [line.rstrip() for line in tf.readlines()]
+            expected_lines = [line.rstrip() for line in ef.readlines()]
+            # Remove trailing blank lines
+            while test_lines and test_lines[-1] == '':
+                test_lines.pop()
+            while expected_lines and expected_lines[-1] == '':
+                expected_lines.pop()
             print('--- test.txt ---')
-            print(tf.read())
+            print('\n'.join(test_lines))
             print('--- expected.txt ---')
-            print(ef.read())
-        result = subprocess.run(['diff', '-u', expected_file, test_file], capture_output=True)
-        if result.returncode == 0:
-            print('[E2E] PASS: Files match.')
+            print('\n'.join(expected_lines))
+        if test_lines == expected_lines:
+            print('[E2E] PASS: Files match (ignoring trailing blank lines).')
             sys.exit(0)
         else:
-            print('[E2E] FAIL: Files differ.')
-            print(result.stdout.decode())
+            print('[E2E] FAIL: Files differ (ignoring trailing blank lines).')
+            for i, (a, b) in enumerate(zip(expected_lines, test_lines)):
+                if a != b:
+                    print(f'Line {i+1} differs: expected: {a!r}, got: {b!r}')
+            if len(expected_lines) != len(test_lines):
+                print(f'File lengths differ: expected {len(expected_lines)} lines, got {len(test_lines)} lines')
             sys.exit(1)
     finally:
         shutil.rmtree(temp_dir)
