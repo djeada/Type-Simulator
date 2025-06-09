@@ -6,7 +6,7 @@ import sys
 import time
 import pexpect
 
-TEST_TEXT = "Hello, E2E test!\nThis is a minimal check."
+TEST_TEXT = "Hello, E2E test!\nThis is a minimal check.\n"
 
 EDITOR_TIMEOUT = 30  # seconds
 TYPER_TIMEOUT = 30   # seconds
