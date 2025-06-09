@@ -32,7 +32,7 @@ def main():
             with open(expected_file, "w") as f:
                 f.write(case["expected"] + "\n")
 
-            # Build the command under a throw-away X server
+            # Build the command under a throw-away X server (no --window-mode at all)
             base_cmd = [
                 sys.executable, "-m", "src.main",
                 "--file", test_file,
