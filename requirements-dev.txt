@@ -1,0 +1,6 @@
+# build & packaging
+nuitka
+
+# testing & linting (optional)
+pytest
+flake8
