@@ -24,8 +24,14 @@ class TypeSimulatorParser(argparse.ArgumentParser):
         self.add_argument(
             "-f",
             "--file",
-            required=True,
-            help="Path to the text file to type into",
+            required=False,  # No longer required
+            help="Path to the text file to type into. If omitted, focus mode is enabled.",
+        )
+        self.add_argument(
+            "--mode",
+            choices=["gui", "terminal", "direct", "focus"],
+            default="gui",
+            help="Typing mode: gui (editor), terminal (shell), direct (file), or focus (active window).",
         )
         self.add_argument(
             "-s",
@@ -44,8 +50,8 @@ class TypeSimulatorParser(argparse.ArgumentParser):
         self.add_argument(
             "-t",
             "--text",
-            required=True,
-            help="Text to type",
+            required=False,  # Not required in focus mode
+            help="Text to type. If omitted, will use file contents if --file is given.",
         )
         self.add_argument(
             "--log-level",

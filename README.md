@@ -12,6 +12,7 @@
   - **GUI**: Drive a full editor (e.g. vim, gedit) under Xvfb for headless CI.
   - **Terminal**: Open a terminal emulator for shell-driven typing.
   - **Direct**: Write text straight to a file without a GUI.
+  - **Focus**: Type directly into the currently focused window (requires platform-specific tools).
 - **Verbose Logging**: Adjustable log levels (`DEBUG`, `INFO`, `WARNING`, `ERROR`) for troubleshooting.
 
 ## 📦 Installation
@@ -49,33 +50,55 @@ You can also customize the build by editing `build/config.json` to target differ
 Run via Python module interface:
 
 ```bash
+# Basic mode with file output
 python -m src.main \  # or `python main.py` if in root
-  --file <path/to/output.txt> \  # destination file
+  --file <path/to/output.txt> \  # destination file (optional)
   --text "Your text here" \   # direct text input
+  --mode <gui|terminal|direct|focus> \  # typing mode (default: gui)
   --speed 0.1 \                # seconds/char (default: 0.15)
   --variance 0.02 \            # typing variance (default: 0.05)
   --log-level DEBUG            # log verbosity (optional)
 ```
 
-Or launch with a custom editor script:
-
-```bash
-python -m src.main \
-  --file demo.txt \
-  --text "Hello, World!" \
-  --editor-script "gedit" \
-  --speed 0.08 \
-  --variance 0.01
-```
-
 ### Examples
 
-- **GUI Mode** (default): Types into `vi` in an X window under Xvfb.
-- **Terminal Mode**: Pass `--mode terminal` and `--editor-script "xterm -e bash"` to open a shell and type commands.
-- **Direct Mode**: Pass `--mode direct` to skip GUI and write text directly:
+- **GUI Mode** (default): Types into `vi` in an X window:
+  ```bash
+  python -m src.main --file demo.txt --text "Hello, World!"
+  ```
+
+- **Terminal Mode**: Open a shell and type commands:
+  ```bash
+  python -m src.main --mode terminal --file demo.txt --text "ls -la"
+  ```
+
+- **Direct Mode**: Write text directly to file:
   ```bash
   python -m src.main --mode direct --file file.txt --text "Quick write"
   ```
+
+- **Focus Mode**: Type into the currently focused window:
+  ```bash
+  # Linux (requires xdotool)
+  python -m src.main --mode focus --text "Type this wherever!"
+  
+  # macOS (uses built-in osascript)
+  python -m src.main --mode focus --text "Type into active window"
+  
+  # Windows (uses pyautogui)
+  python -m src.main --mode focus --text "Platform-agnostic typing"
+  ```
+
+### Platform-Specific Requirements
+
+- **Linux**: For focus mode, install `xdotool`:
+  ```bash
+  sudo apt-get install xdotool  # Debian/Ubuntu
+  sudo dnf install xdotool      # Fedora/RHEL
+  ```
+
+- **macOS**: Focus mode uses built-in `osascript`
+- **Windows**: Focus mode uses PyAutoGUI (installed via requirements.txt)
 
 ## 🔧 Customization
 

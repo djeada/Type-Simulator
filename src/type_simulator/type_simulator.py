@@ -19,6 +19,7 @@ class Mode(Enum):
     GUI = "gui"
     TERMINAL = "terminal"
     DIRECT = "direct"
+    FOCUS = "focus"  # New mode for focus typing
 
 
 class TypeSimulator:
@@ -46,8 +47,6 @@ class TypeSimulator:
         pre_launch_cmd: Optional[str] = None,
         **kwargs,
     ):
-        # Unpack arguments for backward and forward compatibility
-        # Priority: explicit keyword > positional > None
         file_path = None
         text = None
         # Handle legacy signature: (editor_script_path, file_path, text, ...)
@@ -69,7 +68,6 @@ class TypeSimulator:
             editor_cmd = kwargs['editor_script_path']
         if 'editor_cmd' in kwargs and not editor_cmd:
             editor_cmd = kwargs['editor_cmd']
-
         # Setup logging
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.debug(
@@ -77,20 +75,23 @@ class TypeSimulator:
             file_path, mode, wait, editor_cmd
         )
 
-        self.mode = mode
+        # Detect focus mode: if file_path is None, switch to FOCUS
+        if not file_path:
+            self.mode = Mode.FOCUS
+        else:
+            self.mode = Mode(mode) if isinstance(mode, str) else mode
         self.wait = wait
-        self.file_manager = FileManager(str(file_path))
+        self.file_manager = FileManager(str(file_path)) if file_path else None
         self.text = text
         self.texter = TextTyper(text, typing_speed, typing_variance)
         self.pre_launch_cmd = pre_launch_cmd
-
-        if mode in (Mode.GUI, Mode.TERMINAL):
+        if self.mode in (Mode.GUI, Mode.TERMINAL):
             # Always honor explicit editor_cmd if provided
             if editor_cmd:
                 cmd = editor_cmd
             else:
                 cmd = (
-                    "xterm -fa 'Monospace' -fs 10 -e vi" if mode == Mode.GUI else "xterm -e bash"
+                    "xterm -fa 'Monospace' -fs 10 -e vi" if self.mode == Mode.GUI else "xterm -e bash"
                 )
             self.editor_manager = EditorManager(cmd)
         else:
@@ -112,17 +113,23 @@ class TypeSimulator:
     def run(self) -> None:
         """Execute the typing workflow based on the selected mode."""
         self.logger.info("Starting TypeSimulator in %s mode", self.mode.value)
-        try:
-            self._execute_pre_launch_cmd()
-            if self.mode == Mode.DIRECT:
-                self._run_direct()
-            else:
+
+        # Let expected errors propagate up
+        self._execute_pre_launch_cmd()
+
+        if self.mode == Mode.DIRECT:
+            self._run_direct()
+        elif self.mode == Mode.FOCUS:
+            self._run_focus()
+        else:
+            try:
                 proc = self._launch_editor()
                 self._type_content()
                 self._finalize(proc)
-        except Exception:
-            self.logger.exception("TypeSimulator failed")
-            sys.exit(1)
+            except Exception:
+                self.logger.exception("Editor mode failed")
+                raise RuntimeError("Failed to run editor mode") from None
+
         self.logger.info("TypeSimulator completed successfully")
 
     def _run_direct(self) -> None:
@@ -212,3 +219,72 @@ class TypeSimulator:
         )
         # post-exit pause for stability (retain small delay)
         time.sleep(0.5)
+
+    def _run_focus(self) -> None:
+        """
+        Send keystrokes to the currently focused window using platform-specific tools:
+        - Linux: xdotool
+        - macOS: osascript (System Events)
+        - Windows: pyautogui (direct)
+        """
+        self.logger.info("Focus mode: typing into the currently focused window.")
+        
+        # Validate required text input
+        if not self.text:
+            raise ValueError("No text provided for focus mode.")
+
+        # Import dependencies
+        import platform
+        import shlex
+        import subprocess
+        from utils.utils import is_program_installed, get_focus_mode_dependency, install_instructions
+
+        # Get platform-specific dependency
+        system = platform.system()
+        required_tool = get_focus_mode_dependency(system)
+        
+        # Check dependencies if needed
+        if required_tool and not is_program_installed(required_tool):
+            raise RuntimeError(
+                f"Required tool '{required_tool}' for focus mode on {system} "
+                f"is not installed. {install_instructions(required_tool)}"
+            )
+
+        try:
+            if system == "Linux":
+                # Use xdotool with configured typing speed
+                delay_ms = int(self.texter.typing_speed * 1000)
+                cmd = ["xdotool", "type", "--delay", str(delay_ms)]
+                
+                # Handle special characters and line breaks
+                lines = self.text.split('\\n')
+                for i, line in enumerate(lines):
+                    if i > 0:
+                        subprocess.run(["xdotool", "key", "Return"], check=True)
+                    if line:  # Skip empty lines
+                        subprocess.run(cmd + [line], check=True)
+                        
+            elif system == "Darwin":
+                # Use AppleScript's System Events
+                script = (
+                    'tell application "System Events"\n'
+                    f'delay {self.texter.typing_speed}\n'  # Initial delay
+                    f'keystroke {shlex.quote(self.text)}\n'
+                    'end tell'
+                )
+                subprocess.run(["osascript", "-e", script], check=True)
+                
+            elif system == "Windows":
+                # Use PyAutoGUI directly
+                import pyautogui
+                pyautogui.write(self.text, interval=self.texter.typing_speed)
+                
+            else:
+                raise NotImplementedError(f"Focus mode not supported on {system}")
+                
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Focus mode typing failed: {e}") from e
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error in focus mode: {e}") from e
+            
+        self.logger.info("Focus mode typing completed successfully.")

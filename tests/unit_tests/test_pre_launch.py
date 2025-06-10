@@ -33,7 +33,7 @@ def test_pre_launch_command_failure():
             mode=Mode.DIRECT,
             pre_launch_cmd="nonexistent-command"
         )
-        with pytest.raises(SystemExit):
+        with pytest.raises(RuntimeError, match="Pre-launch command failed"):
             sim.run()
 
 
