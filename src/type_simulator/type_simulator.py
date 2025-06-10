@@ -230,74 +230,20 @@ class TypeSimulator:
 
     def _run_focus(self) -> None:
         """
-        Send keystrokes to the currently focused window using platform-specific tools:
-        - Linux: xdotool
-        - macOS: osascript (System Events)
-        - Windows: pyautogui (direct)
+        Focus mode: simulate all text, key sequences, and waits in the current window.
+        Delegates to TextTyper to honor {…} commands.
         """
         self.logger.info("Focus mode: typing into the currently focused window.")
 
-        # Validate required text input
         if not self.text:
             raise ValueError("No text provided for focus mode.")
 
-        # Import dependencies
-        import platform
-        import shlex
-        import subprocess
-        from utils.utils import (
-            is_program_installed,
-            get_focus_mode_dependency,
-            install_instructions,
-        )
-
-        # Get platform-specific dependency
-        system = platform.system()
-        required_tool = get_focus_mode_dependency(system)
-
-        # Check dependencies if needed
-        if required_tool and not is_program_installed(required_tool):
-            raise RuntimeError(
-                f"Required tool '{required_tool}' for focus mode on {system} "
-                f"is not installed. {install_instructions(required_tool)}"
-            )
-
-        try:
-            if system == "Linux":
-                # Use xdotool with configured typing speed
-                delay_ms = int(self.texter.typing_speed * 1000)
-                cmd = ["xdotool", "type", "--delay", str(delay_ms)]
-
-                # Handle special characters and line breaks
-                lines = self.text.split("\\n")
-                for i, line in enumerate(lines):
-                    if i > 0:
-                        subprocess.run(["xdotool", "key", "Return"], check=True)
-                    if line:  # Skip empty lines
-                        subprocess.run(cmd + [line], check=True)
-
-            elif system == "Darwin":
-                # Use AppleScript's System Events
-                script = (
-                    'tell application "System Events"\n'
-                    f"delay {self.texter.typing_speed}\n"  # Initial delay
-                    f"keystroke {shlex.quote(self.text)}\n"
-                    "end tell"
-                )
-                subprocess.run(["osascript", "-e", script], check=True)
-
-            elif system == "Windows":
-                # Use PyAutoGUI directly
-                import pyautogui
-
-                pyautogui.write(self.text, interval=self.texter.typing_speed)
-
-            else:
-                raise NotImplementedError(f"Focus mode not supported on {system}")
-
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Focus mode typing failed: {e}") from e
-        except Exception as e:
-            raise RuntimeError(f"Unexpected error in focus mode: {e}") from e
+        # Delegate parsing and execution to TextTyper
+        self.logger.debug("Delegating to TextTyper for focus-mode typing")
+        # Ensure our texter uses the correct backend if provided
+        if self.texter.backend is None and hasattr(self, "backend"):
+            self.texter.backend = self.backend
+        self.texter.text = self.text
+        self.texter.simulate_typing()
 
         self.logger.info("Focus mode typing completed successfully.")

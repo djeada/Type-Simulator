@@ -171,5 +171,12 @@ class TextTyper:
         self._typist = Typist(typing_speed, typing_variance, backend)
 
     def simulate_typing(self):
+        # Debug: log parsed tokens
+        tokens = self._parser.parse(self.text)
+        logger.info(
+            f"Parsed tokens: {[type(t).__name__ + ':' + (','.join(t.keys) if hasattr(t,'keys') else getattr(t,'text',str(t.duration) if hasattr(t,'duration') else '')) for t in tokens]}"
+        )
+        self._typist.execute(tokens)
+        return
         tokens = self._parser.parse(self.text)
         self._typist.execute(tokens)
