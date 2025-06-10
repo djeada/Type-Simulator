@@ -43,6 +43,7 @@ class TypeSimulator:
         typing_speed: float = 0.05,
         typing_variance: float = 0.05,
         wait: float = 0.0,
+        pre_launch_cmd: Optional[str] = None,
         **kwargs,
     ):
         # Unpack arguments for backward and forward compatibility
@@ -81,6 +82,7 @@ class TypeSimulator:
         self.file_manager = FileManager(str(file_path))
         self.text = text
         self.texter = TextTyper(text, typing_speed, typing_variance)
+        self.pre_launch_cmd = pre_launch_cmd
 
         if mode in (Mode.GUI, Mode.TERMINAL):
             # Always honor explicit editor_cmd if provided
@@ -94,10 +96,24 @@ class TypeSimulator:
         else:
             self.editor_manager = None
 
+    def _execute_pre_launch_cmd(self) -> None:
+        """Execute the pre-launch command if one is specified."""
+        if not self.pre_launch_cmd:
+            return
+            
+        self.logger.info(f"Running pre-launch command: {self.pre_launch_cmd}")
+        try:
+            import subprocess
+            subprocess.run(self.pre_launch_cmd, shell=True, check=True)
+        except Exception as e:
+            self.logger.error(f"Pre-launch command failed: {e}")
+            raise RuntimeError(f"Pre-launch command failed: {e}")
+
     def run(self) -> None:
         """Execute the typing workflow based on the selected mode."""
         self.logger.info("Starting TypeSimulator in %s mode", self.mode.value)
         try:
+            self._execute_pre_launch_cmd()
             if self.mode == Mode.DIRECT:
                 self._run_direct()
             else:

@@ -62,6 +62,11 @@ class TypeSimulatorParser(argparse.ArgumentParser):
                 "and before closing the editor (default: 0)"
             ),
         )
+        self.add_argument(
+            "--pre-launch-cmd",
+            help="Command to run synchronously before launching the editor or typing (e.g. open a terminal, start a recorder)",
+            default=None,
+        )
 
     def parse(self):
         return self.parse_args()
