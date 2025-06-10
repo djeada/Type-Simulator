@@ -2,7 +2,7 @@ import re
 import time
 import logging
 import random
-import pyautogui
+import os
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -140,7 +140,16 @@ class Typist:
     ):
         self.typing_speed = typing_speed
         self.typing_variance = typing_variance
-        self.backend = backend or pyautogui
+        if backend is None:
+            if 'DISPLAY' not in os.environ:
+                raise RuntimeError(
+                    "pyautogui requires a running X server. Please run your tests under Xvfb or set DISPLAY."
+                )
+            import pyautogui
+
+            self.backend = pyautogui
+        else:
+            self.backend = backend
 
     def execute(self, tokens: list[Token]):
         for token in tokens:
