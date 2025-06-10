@@ -1,122 +1,175 @@
-import random
-import shlex
-import subprocess
-import sys
+import re
 import time
-
+import logging
+import random
 import pyautogui
 
-from utils.utils import is_program_installed, install_instructions
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+class Token:
+    def execute(self, executor):
+        raise NotImplementedError
+
+
+class TextToken(Token):
+    def __init__(self, text: str):
+        self.text = text
+
+    def execute(self, executor):
+        for ch in self.text:
+            interval = executor.typing_speed + (
+                executor.typing_variance * (2 * random.random() - 1)
+            )
+            executor.backend.write(ch, interval=interval)
+
+
+class WaitToken(Token):
+    def __init__(self, duration: float):
+        self.duration = duration
+
+    def execute(self, executor):
+        time.sleep(self.duration)
+
+
+class KeyToken(Token):
+    def __init__(self, keys: list[str]):
+        self.keys = keys
+
+    def execute(self, executor):
+        executor.backend.hotkey(*self.keys)
+
+
+class CommandParser:
+    """
+    Parses input text into tokens (TextToken, WaitToken, KeyToken).
+    - Escaped braces: '\{' and '\}' produce literal '{' and '}'.
+    - {WAIT_x} pauses x seconds.
+    - {<key>+...} presses keys simultaneously.
+
+    Invalid sequences are skipped with a warning.
+    """
+
+    _SPECIAL_KEY_REGEX = re.compile(r"<([^>]+)>")
+    _WAIT_REGEX = re.compile(r"^WAIT_(\d+(?:\.\d+)?)$")
+
+    def parse(self, text: str) -> list[Token]:
+        tokens = []
+        buffer = []
+        i = 0
+
+        def flush_buffer():
+            if buffer:
+                tokens.append(TextToken("".join(buffer)))
+                buffer.clear()
+
+        while i < len(text):
+            # Drop redundant backslash before escape
+            if text[i] == "\\" and i + 1 < len(text) and text[i + 1] == "\\":
+                i += 1
+                continue
+            ch = text[i]
+            # Escaped brace
+            if ch == "\\" and i + 1 < len(text) and text[i + 1] in "{}":
+                buffer.append(text[i + 1])
+                i += 2
+                continue
+
+            if ch == "{":
+                flush_buffer()
+                end = text.find("}", i)
+                if end == -1:
+                    logger.warning(f"Unmatched '{{' at position {i}")
+                    i += 1
+                    continue
+                content = text[i + 1 : end]
+                cleaned = "".join(content.split())
+                # WAIT
+                m_wait = self._WAIT_REGEX.match(cleaned)
+                if m_wait:
+                    tokens.append(WaitToken(float(m_wait.group(1))))
+                else:
+                    parts = cleaned.split("+")
+                    keys = []
+                    valid = True
+                    for part in parts:
+                        if not part:
+                            valid = False
+                            break
+                        m_key = self._SPECIAL_KEY_REGEX.fullmatch(part)
+                        if m_key:
+                            keys.append(m_key.group(1).lower())
+                        elif len(part) == 1:
+                            keys.append(part)
+                        else:
+                            logger.warning(f"Invalid key '{part}' in '{{{content}}}'")
+                            valid = False
+                            break
+                    if valid and keys:
+                        tokens.append(KeyToken(keys))
+                    else:
+                        logger.warning(f"Skipping invalid sequence '{{{content}}}'")
+                i = end + 1
+            else:
+                buffer.append(ch)
+                i += 1
+        flush_buffer()
+        # Merge adjacent TextTokens
+        merged = []
+        for t in tokens:
+            if (
+                merged
+                and isinstance(t, TextToken)
+                and isinstance(merged[-1], TextToken)
+            ):
+                merged[-1].text += t.text
+            else:
+                merged.append(t)
+        return merged
+
+
+class Typist:
+    """
+    Executes tokens via a backend (pyautogui by default).
+    """
+
+    def __init__(
+        self, typing_speed: float = 0.05, typing_variance: float = 0.02, backend=None
+    ):
+        self.typing_speed = typing_speed
+        self.typing_variance = typing_variance
+        self.backend = backend or pyautogui
+
+    def execute(self, tokens: list[Token]):
+        for token in tokens:
+            try:
+                token.execute(self)
+            except Exception as e:
+                logging.error(f"Error executing {token}: {e}")
 
 
 class TextTyper:
+    """
+    Backward-compatible interface:
+    TextTyper(text, typing_speed, typing_variance)
+    """
+
     def __init__(
-        self, text: str, typing_speed: float = 0.05, typing_variance: float = 0.05
+        self,
+        text: str,
+        typing_speed: float = 0.05,
+        typing_variance: float = 0.05,
+        backend=None,
     ):
         self.text = text
         self.typing_speed = typing_speed
         self.typing_variance = typing_variance
-        self.special_keys = self._get_special_keys()
+        self.backend = backend
+        self._parser = CommandParser()
+        self._typist = Typist(typing_speed, typing_variance, backend)
 
     def simulate_typing(self):
-        i = 0
-        while i < len(self.text):
-            char = self.text[i]
-            if char in ["<", ">"]:  # TODO: make it configurable
-                self._copy_paste(char)
-                time.sleep(self.typing_speed)
-                i += 1
-            elif char == "{":
-                if self.text.startswith("{WAIT_", i):
-                    duration, i = self._extract_wait_duration(i)
-                    self._wait_for_duration(duration)
-                else:
-                    # Check if it's a special key
-                    end_index = self.text.find("}", i)
-                    if end_index == -1:
-                        raise ValueError("Unmatched '{' in text.")
-                    possible_special_key = self.text[i : end_index + 1]
-                    if possible_special_key in self.special_keys:
-                        # Handle special key
-                        pyautogui.press(self.special_keys[possible_special_key])
-                        i = end_index + 1
-                    else:
-                        # Process unrecognized text character by character
-                        while i < end_index:
-                            pyautogui.write(
-                                self.text[i],
-                                interval=self.typing_speed
-                                + random.uniform(0, self.typing_variance),
-                            )
-                            i += 1
-            elif char == "\n":
-                pyautogui.press("enter")
-                i += 1
-            else:
-                pyautogui.write(
-                    char,
-                    interval=self.typing_speed
-                    + random.uniform(0, self.typing_variance),
-                )
-                time.sleep(
-                    random.uniform(
-                        self.typing_speed, self.typing_speed + self.typing_variance
-                    )
-                )
-                i += 1
-
-    def _copy_paste(
-        self,
-        char: str,
-        clipboard_command: str = "xclip -selection clipboard",
-        hotkey_sequence: tuple = ("ctrl", "shift", "v"),
-    ):
-        # Check if required programs are installed
-        for program in ["xclip"]:
-            if not is_program_installed(program):
-                raise SystemExit(
-                    f"Required program '{program}' is not installed. {install_instructions(program)}"
-                )
-
-        try:
-            # Safely quote the character to be echoed
-            safe_char = shlex.quote(char)
-            # Build and execute the command
-            command = f"echo -n {safe_char} | {clipboard_command}"
-            result = subprocess.run(command, shell=True, check=True)
-
-            # Check for successful execution
-            if result.returncode != 0:
-                raise subprocess.SubprocessError(
-                    f"Command execution failed with return code {result.returncode}."
-                )
-
-            # Perform the hotkey action
-            import pyautogui
-
-            pyautogui.hotkey(*hotkey_sequence)
-        except Exception as e:
-            # Handle any exception that occurred during execution
-            sys.stderr.write(f"An error occurred: {str(e)}\n")
-            raise
-
-    def _get_special_keys(self) -> dict:
-        return {"{ESC}": "esc", "{ALT}": "alt", "{CTRL}": "ctrl"}
-
-    def _extract_wait_duration(self, start_index: int) -> (float, int):
-        end_index = self.text.find("}", start_index)
-        if end_index == -1:
-            raise ValueError("Unmatched '{' in text.")
-        wait_sequence = self.text[start_index + 6 : end_index]  # Skip past '{WAIT_'
-        duration = float(wait_sequence)
-        return duration, end_index + 1
-
-    def _extract_special_key(self, start_index: int) -> (str, int):
-        end_index = self.text.find("}", start_index)
-        if end_index == -1:
-            raise ValueError("Unmatched '{' in text.")
-        special_key = self.text[start_index : end_index + 1]
-        return special_key, end_index + 1
-
-    def _wait_for_duration(self, duration: float):
-        time.sleep(duration)
+        tokens = self._parser.parse(self.text)
+        self._typist.execute(tokens)

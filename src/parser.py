@@ -60,7 +60,8 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             help="Verbosity of logs (default INFO)",
         )
         self.add_argument(
-            "-w", "--wait",
+            "-w",
+            "--wait",
             type=float,
             default=0.0,
             help=(

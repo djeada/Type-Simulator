@@ -21,7 +21,9 @@ class FileManager:
         file so downstream code can safely open it for writing.
     """
 
-    def __init__(self, file_path: Optional[str | Path] = None, *, create_if_missing: bool = True) -> None:
+    def __init__(
+        self, file_path: Optional[str | Path] = None, *, create_if_missing: bool = True
+    ) -> None:
         self.file_path: Optional[Path] = (
             Path(file_path).expanduser().resolve() if file_path else None
         )

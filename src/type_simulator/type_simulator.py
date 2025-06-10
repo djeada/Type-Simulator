@@ -62,17 +62,20 @@ class TypeSimulator:
             elif len(args) == 1:
                 file_path = args[0]
         # Allow keyword overrides
-        file_path = kwargs.get('file_path', file_path)
-        text = kwargs.get('text', text)
-        if 'editor_script_path' in kwargs and not editor_cmd:
-            editor_cmd = kwargs['editor_script_path']
-        if 'editor_cmd' in kwargs and not editor_cmd:
-            editor_cmd = kwargs['editor_cmd']
+        file_path = kwargs.get("file_path", file_path)
+        text = kwargs.get("text", text)
+        if "editor_script_path" in kwargs and not editor_cmd:
+            editor_cmd = kwargs["editor_script_path"]
+        if "editor_cmd" in kwargs and not editor_cmd:
+            editor_cmd = kwargs["editor_cmd"]
         # Setup logging
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.debug(
             "Initialized with file_path=%s, mode=%s, wait=%s, editor_cmd=%s",
-            file_path, mode, wait, editor_cmd
+            file_path,
+            mode,
+            wait,
+            editor_cmd,
         )
 
         # Detect focus mode: if file_path is None, switch to FOCUS
@@ -91,7 +94,9 @@ class TypeSimulator:
                 cmd = editor_cmd
             else:
                 cmd = (
-                    "xterm -fa 'Monospace' -fs 10 -e vi" if self.mode == Mode.GUI else "xterm -e bash"
+                    "xterm -fa 'Monospace' -fs 10 -e vi"
+                    if self.mode == Mode.GUI
+                    else "xterm -e bash"
                 )
             self.editor_manager = EditorManager(cmd)
         else:
@@ -101,10 +106,11 @@ class TypeSimulator:
         """Execute the pre-launch command if one is specified."""
         if not self.pre_launch_cmd:
             return
-            
+
         self.logger.info(f"Running pre-launch command: {self.pre_launch_cmd}")
         try:
             import subprocess
+
             subprocess.run(self.pre_launch_cmd, shell=True, check=True)
         except Exception as e:
             self.logger.error(f"Pre-launch command failed: {e}")
@@ -137,7 +143,8 @@ class TypeSimulator:
         self.file_manager.save_text(data)
         self.logger.info(
             "Direct mode: wrote %d characters to %s",
-            len(data), self.file_manager.file_path
+            len(data),
+            self.file_manager.file_path,
         )
 
     def _launch_editor(self) -> subprocess.Popen:
@@ -150,13 +157,9 @@ class TypeSimulator:
     def _type_content(self) -> None:
         if not self.text:
             self.text = self.file_manager.load_text()
-            self.logger.debug(
-                "Loaded text from file: %d characters", len(self.text)
-            )
+            self.logger.debug("Loaded text from file: %d characters", len(self.text))
         else:
-            self.logger.debug(
-                "Using provided text: %d characters", len(self.text)
-            )
+            self.logger.debug("Using provided text: %d characters", len(self.text))
 
         if self.mode == Mode.GUI:
             self.logger.debug("Entering insert mode")
@@ -170,9 +173,7 @@ class TypeSimulator:
     def _finalize(self, proc: subprocess.Popen) -> None:
         # wait before closing editor
         if self.wait and self.wait > 0:
-            self.logger.debug(
-                "Waiting %s seconds before closing editor", self.wait
-            )
+            self.logger.debug("Waiting %s seconds before closing editor", self.wait)
             time.sleep(self.wait)
 
         closing_done = False
@@ -196,7 +197,9 @@ class TypeSimulator:
             # Add more editors here as needed
             # For unknown editors, do not attempt to close automatically
             if not closing_done:
-                self.logger.debug("No automatic closing sequence for this editor; leaving open.")
+                self.logger.debug(
+                    "No automatic closing sequence for this editor; leaving open."
+                )
 
         # Calculate a dynamic timeout based on text length and typing speed
         min_timeout = 10
@@ -204,19 +207,24 @@ class TypeSimulator:
         text_length = len(self.text) if self.text else 0
         word_count = len(self.text.split()) if self.text else 0
         # Estimate: each character takes typing_speed + variance/2 on average
-        avg_char_time = getattr(self.texter, 'typing_speed', 0.15) + getattr(self.texter, 'typing_variance', 0.05) / 2
+        avg_char_time = (
+            getattr(self.texter, "typing_speed", 0.15)
+            + getattr(self.texter, "typing_variance", 0.05) / 2
+        )
         estimated_typing_time = text_length * avg_char_time
         # Add a buffer for editor startup/closing
         buffer_time = 5
-        timeout = min(max(int(estimated_typing_time + buffer_time), min_timeout), max_timeout)
-        self.logger.debug(f"Waiting for editor to exit (timeout={timeout}s, text_length={text_length}, avg_char_time={avg_char_time:.3f})")
+        timeout = min(
+            max(int(estimated_typing_time + buffer_time), min_timeout), max_timeout
+        )
+        self.logger.debug(
+            f"Waiting for editor to exit (timeout={timeout}s, text_length={text_length}, avg_char_time={avg_char_time:.3f})"
+        )
         try:
             proc.wait(timeout=timeout)
         except Exception as e:
             self.logger.warning(f"Editor did not exit in time: {e}")
-        self.logger.debug(
-            "Editor exited with code %s", proc.returncode
-        )
+        self.logger.debug("Editor exited with code %s", proc.returncode)
         # post-exit pause for stability (retain small delay)
         time.sleep(0.5)
 
@@ -228,7 +236,7 @@ class TypeSimulator:
         - Windows: pyautogui (direct)
         """
         self.logger.info("Focus mode: typing into the currently focused window.")
-        
+
         # Validate required text input
         if not self.text:
             raise ValueError("No text provided for focus mode.")
@@ -237,12 +245,16 @@ class TypeSimulator:
         import platform
         import shlex
         import subprocess
-        from utils.utils import is_program_installed, get_focus_mode_dependency, install_instructions
+        from utils.utils import (
+            is_program_installed,
+            get_focus_mode_dependency,
+            install_instructions,
+        )
 
         # Get platform-specific dependency
         system = platform.system()
         required_tool = get_focus_mode_dependency(system)
-        
+
         # Check dependencies if needed
         if required_tool and not is_program_installed(required_tool):
             raise RuntimeError(
@@ -255,36 +267,37 @@ class TypeSimulator:
                 # Use xdotool with configured typing speed
                 delay_ms = int(self.texter.typing_speed * 1000)
                 cmd = ["xdotool", "type", "--delay", str(delay_ms)]
-                
+
                 # Handle special characters and line breaks
-                lines = self.text.split('\\n')
+                lines = self.text.split("\\n")
                 for i, line in enumerate(lines):
                     if i > 0:
                         subprocess.run(["xdotool", "key", "Return"], check=True)
                     if line:  # Skip empty lines
                         subprocess.run(cmd + [line], check=True)
-                        
+
             elif system == "Darwin":
                 # Use AppleScript's System Events
                 script = (
                     'tell application "System Events"\n'
-                    f'delay {self.texter.typing_speed}\n'  # Initial delay
-                    f'keystroke {shlex.quote(self.text)}\n'
-                    'end tell'
+                    f"delay {self.texter.typing_speed}\n"  # Initial delay
+                    f"keystroke {shlex.quote(self.text)}\n"
+                    "end tell"
                 )
                 subprocess.run(["osascript", "-e", script], check=True)
-                
+
             elif system == "Windows":
                 # Use PyAutoGUI directly
                 import pyautogui
+
                 pyautogui.write(self.text, interval=self.texter.typing_speed)
-                
+
             else:
                 raise NotImplementedError(f"Focus mode not supported on {system}")
-                
+
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Focus mode typing failed: {e}") from e
         except Exception as e:
             raise RuntimeError(f"Unexpected error in focus mode: {e}") from e
-            
+
         self.logger.info("Focus mode typing completed successfully.")
