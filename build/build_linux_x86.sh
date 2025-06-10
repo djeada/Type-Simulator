@@ -34,11 +34,13 @@ fi
 echo "Found source file: $SRC_FILE"
 
 # 3) Build
-echo "Running default build: standalone, onefile → dist/"
+BIN_NAME="type_simulator"
+echo "Running default build: standalone, onefile → dist/$BIN_NAME"
 "$NUITKA_CMD" \
   --standalone \
   --onefile \
   --output-dir=dist \
+  --output-filename=dist/$BIN_NAME \
   "$SRC_FILE"
 
 echo "Build complete! Artifacts in: $PROJECT_ROOT/dist/"

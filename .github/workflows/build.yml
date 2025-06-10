@@ -49,3 +49,13 @@ jobs:
           ls -l dist
           echo "Executable file type:"
           file dist/main || file dist/type_simulator
+
+      - name: Run built executable to check for runtime errors
+        run: |
+          if [ -f dist/type_simulator ]; then
+            chmod +x dist/type_simulator
+            dist/type_simulator --version || (echo '❌ Runtime error in dist/type_simulator' && exit 1)
+          else
+            echo '❌ No built executable found in dist/'
+            exit 1
+          fi
