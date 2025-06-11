@@ -1,0 +1,10 @@
+# Special keys & hotkeys demo
+
+# Select all text
+<ctrl>+a
+# Copy selection
+<ctrl>+c
+# Pause briefly
+WAIT_0.5
+# Paste selection
+<ctrl>+v
