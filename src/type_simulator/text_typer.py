@@ -42,11 +42,35 @@ class KeyToken(Token):
         executor.backend.hotkey(*self.keys)
 
 
+class MouseMoveToken(Token):
+    def __init__(self, x: int, y: int, duration: float = 0):
+        self.x = x
+        self.y = y
+        self.duration = duration
+
+    def execute(self, executor):
+        executor.backend.moveTo(self.x, self.y, duration=self.duration)
+
+
+class MouseClickToken(Token):
+    def __init__(self, button: str = 'left', clicks: int = 1, interval: float = 0):
+        self.button = button
+        self.clicks = clicks
+        self.interval = interval
+
+    def execute(self, executor):
+        executor.backend.click(button=self.button,
+                               clicks=self.clicks,
+                               interval=self.interval)
+
+
 class CommandParser:
     """
-    Parses input text into tokens (TextToken, WaitToken, KeyToken).
+    Parses input text into tokens (TextToken, WaitToken, KeyToken, MouseMoveToken, MouseClickToken).
     - Escaped braces: '\{' and '\}' produce literal '{' and '}'.
     - {WAIT_x} pauses x seconds.
+    - {MOUSE_MOVE_x_y} moves the cursor to (x, y).
+    - {MOUSE_CLICK_button} clicks the mouse (button: left/right/middle).
     - {<key>+...} presses keys simultaneously.
 
     Invalid sequences are skipped with a warning.
@@ -56,8 +80,8 @@ class CommandParser:
     _WAIT_REGEX = re.compile(r"^WAIT_(\d+(?:\.\d+)?)$")
 
     def parse(self, text: str) -> list[Token]:
-        tokens = []
-        buffer = []
+        tokens: list[Token] = []
+        buffer: list[str] = []
         i = 0
 
         def flush_buffer():
@@ -91,33 +115,46 @@ class CommandParser:
                 if m_wait:
                     tokens.append(WaitToken(float(m_wait.group(1))))
                 else:
-                    parts = cleaned.split("+")
-                    keys = []
-                    valid = True
-                    for part in parts:
-                        if not part:
-                            valid = False
-                            break
-                        m_key = self._SPECIAL_KEY_REGEX.fullmatch(part)
-                        if m_key:
-                            keys.append(m_key.group(1).lower())
-                        elif len(part) == 1:
-                            keys.append(part)
-                        else:
-                            logger.warning(f"Invalid key '{part}' in '{{{content}}}'")
-                            valid = False
-                            break
-                    if valid and keys:
-                        tokens.append(KeyToken(keys))
+                    # MOUSE_MOVE
+                    m_move = re.match(r"^MOUSE_MOVE_(\d+)_(\d+)$", cleaned)
+                    if m_move:
+                        x, y = int(m_move.group(1)), int(m_move.group(2))
+                        tokens.append(MouseMoveToken(x, y))
                     else:
-                        logger.warning(f"Skipping invalid sequence '{{{content}}}'")
+                        # MOUSE_CLICK
+                        m_click = re.match(r"^MOUSE_CLICK_(\w+)$", cleaned)
+                        if m_click:
+                            btn = m_click.group(1).lower()
+                            tokens.append(MouseClickToken(button=btn))
+                        else:
+                            # Key sequence
+                            parts = cleaned.split("+")
+                            keys = []
+                            valid = True
+                            for part in parts:
+                                if not part:
+                                    valid = False
+                                    break
+                                m_key = self._SPECIAL_KEY_REGEX.fullmatch(part)
+                                if m_key:
+                                    keys.append(m_key.group(1).lower())
+                                elif len(part) == 1:
+                                    keys.append(part)
+                                else:
+                                    logger.warning(f"Invalid key '{part}' in '{{{content}}}'")
+                                    valid = False
+                                    break
+                            if valid and keys:
+                                tokens.append(KeyToken(keys))
+                            else:
+                                logger.warning(f"Skipping invalid sequence '{{{content}}}'")
                 i = end + 1
             else:
                 buffer.append(ch)
                 i += 1
         flush_buffer()
         # Merge adjacent TextTokens
-        merged = []
+        merged: list[Token] = []
         for t in tokens:
             if (
                 merged
@@ -180,12 +217,8 @@ class TextTyper:
         self._typist = Typist(typing_speed, typing_variance, backend)
 
     def simulate_typing(self):
-        # Debug: log parsed tokens
         tokens = self._parser.parse(self.text)
         logger.info(
-            f"Parsed tokens: {[type(t).__name__ + ':' + (','.join(t.keys) if hasattr(t,'keys') else getattr(t,'text',str(t.duration) if hasattr(t,'duration') else '')) for t in tokens]}"
+            f"Parsed tokens: {[type(t).__name__ + ':' + (','.join(t.keys) if hasattr(t,'keys') else getattr(t,'text',str(t.duration) if hasattr(t,'duration') else getattr(t,'x',None) and getattr(t,'y',None) and f'{t.x},{t.y}' or '')) for t in tokens]}"
         )
-        self._typist.execute(tokens)
-        return
-        tokens = self._parser.parse(self.text)
         self._typist.execute(tokens)
