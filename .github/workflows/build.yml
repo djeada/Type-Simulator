@@ -8,7 +8,6 @@ on:
   pull_request:
     branches:
       - main
-  # allow manual runs from the Actions tab
   workflow_dispatch:
 
 jobs:
@@ -27,7 +26,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3-dev
+          sudo apt-get install -y build-essential python3-dev xvfb
 
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
@@ -52,10 +51,11 @@ jobs:
 
       - name: Run built executable to check for runtime errors
         run: |
-          if [ -f dist/type_simulator ]; then
-            chmod +x dist/type_simulator
-            dist/type_simulator --version || (echo '❌ Runtime error in dist/type_simulator' && exit 1)
-          else
-            echo '❌ No built executable found in dist/'
-            exit 1
+          if [ ! -f dist/type_simulator ]; then
+            echo '❌ No built executable found in dist/' && exit 1
           fi
+          chmod +x dist/type_simulator
+          xvfb-run --auto-servernum \
+            --server-args='-screen 0 1024x768x16 -ac' \
+            dist/type_simulator --version \
+            || (echo '❌ Runtime error in dist/type_simulator' && exit 1)
