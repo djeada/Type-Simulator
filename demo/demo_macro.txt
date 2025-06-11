@@ -1,0 +1,16 @@
+# Combined macro scenario demo
+
+# Open Run dialog
+{<win>+r}
+{WAIT_0.3}
+# Launch command prompt
+cmd
+{<enter>}
+{WAIT_1}
+# Echo a message
+echo Demo complete!
+{<enter>}
+{WAIT_1}
+# Exit
+exit
+{<enter>}
