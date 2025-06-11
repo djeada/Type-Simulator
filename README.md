@@ -79,13 +79,7 @@ python -m src.main \  # or `python main.py` if in root
 
 - **Focus Mode**: Type into the currently focused window:
   ```bash
-  # Linux (requires xdotool)
-  python -m src.main --mode focus --text "Type this wherever!"
-  
-  # macOS (uses built-in osascript)
-  python -m src.main --mode focus --text "Type into active window"
-  
-  # Windows (uses pyautogui)
+  # uses pyautogui
   python -m src.main --mode focus --text "Platform-agnostic typing"
   ```
 
