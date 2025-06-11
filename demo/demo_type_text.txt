@@ -1,0 +1,8 @@
+# Basic text typing demo
+
+# Pause briefly to focus the target window
+# (e.g. WAIT 0.5 seconds)
+WAIT_0.5
+
+# Type a sentence with adjustable speed and variance
+Hello, this is a typing demo!
