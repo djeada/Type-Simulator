@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # src/type_simulator/type_simulator.py
 import logging
-import sys
 import time
 import subprocess  # for process handles
 from enum import Enum
@@ -68,6 +67,7 @@ class TypeSimulator:
             editor_cmd = kwargs["editor_script_path"]
         if "editor_cmd" in kwargs and not editor_cmd:
             editor_cmd = kwargs["editor_cmd"]
+        
         # Setup logging
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.debug(
@@ -77,6 +77,14 @@ class TypeSimulator:
             wait,
             editor_cmd,
         )
+
+        # Convert text input from any source
+        if text is not None:
+            try:
+                from utils.text_input import get_text_content
+                text = get_text_content(text)
+            except Exception as e:
+                self.logger.debug(f"Error processing text input: {e}")
 
         # Detect focus mode: if file_path is None, switch to FOCUS
         if not file_path:
@@ -247,3 +255,5 @@ class TypeSimulator:
         self.texter.simulate_typing()
 
         self.logger.info("Focus mode typing completed successfully.")
+
+

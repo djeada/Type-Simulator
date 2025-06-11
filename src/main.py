@@ -28,13 +28,21 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
 
+    # Process text input first
+    from utils.text_input import get_text_content
+    try:
+        text = get_text_content(args.text)
+    except ValueError as e:
+        logging.error(str(e))
+        sys.exit(1)
+
     # import the simulator only when actually running
     from type_simulator.type_simulator import TypeSimulator
 
     simulator = TypeSimulator(
         editor_script_path=args.editor_script,
         file_path=args.file,
-        text=args.text,
+        text=text,  # Already processed text
         typing_speed=args.speed,
         typing_variance=args.variance,
         wait=args.wait,
