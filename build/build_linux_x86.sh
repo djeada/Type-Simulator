@@ -1,4 +1,3 @@
-# build/build_linux_x86.sh
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -25,7 +24,6 @@ fi
 # 2) Auto-discover project root & main script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-# assume your entry-point is src/main.py; tweak if necessary
 SRC_FILE="$PROJECT_ROOT/src/main.py"
 if [[ ! -f "$SRC_FILE" ]]; then
   echo "Error: source file not found at $SRC_FILE"
@@ -34,11 +32,13 @@ fi
 echo "Found source file: $SRC_FILE"
 
 # 3) Build
-echo "Running default build: standalone, onefile → dist/"
+BIN_NAME="type_simulator"
+echo "Running default build: standalone, onefile → dist/$BIN_NAME"
 "$NUITKA_CMD" \
   --standalone \
   --onefile \
   --output-dir=dist \
+  --output-filename="$BIN_NAME" \
   "$SRC_FILE"
 
 echo "Build complete! Artifacts in: $PROJECT_ROOT/dist/"

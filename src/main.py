@@ -1,19 +1,35 @@
-# src/main.py
 #!/usr/bin/env python3
+# src/main.py
+
+"""
+Type-Simulator entry point.
+
+Patches sys.path for local imports, sets up logging,
+and dispatches to the TypeSimulator class.
+"""
+
 import logging
-import sys
 import os
+import sys
 
 from src.parser import TypeSimulatorParser
 
 
-def main():
+def main() -> None:
+    """
+    Parse CLI args, configure logging, and run the simulator.
+    """
     parser = TypeSimulatorParser()
-    args = parser.parse()
+    args = parser.parse()  # --version is handled here by argparse
+
+    # configure logging
     logging.basicConfig(
         level=getattr(logging, args.log_level),
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
+
+    # import the simulator only when actually running
+    from type_simulator.type_simulator import TypeSimulator
 
     simulator = TypeSimulator(
         editor_script_path=args.editor_script,
@@ -23,13 +39,12 @@ def main():
         typing_variance=args.variance,
         wait=args.wait,
         mode=args.mode,
+        pre_launch_cmd=args.pre_launch_cmd,
     )
     simulator.run()
 
 
 if __name__ == "__main__":
-    # Patch sys.path for src import compatibility
+    # ensure 'src' is on the import path
     sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-    from type_simulator.type_simulator import TypeSimulator
-
     main()
