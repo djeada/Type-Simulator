@@ -1,10 +1,10 @@
 # Special keys & hotkeys demo
 
 # Select all text
-<ctrl>+a
+{<ctrl>+a}
 # Copy selection
-<ctrl>+c
+{<ctrl>+c}
 # Pause briefly
-WAIT_0.5
+{WAIT_0.5}
 # Paste selection
-<ctrl>+v
+{<ctrl>+v}
