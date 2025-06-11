@@ -1,0 +1,13 @@
+# Mouse movement & click demo
+
+# Move cursor to (500, 300)
+MOUSE_MOVE_500_300
+# Wait a moment
+WAIT_0.2
+# Right-click
+MOUSE_CLICK_right
+# Wait again
+WAIT_0.3
+# Double left-click
+MOUSE_CLICK_left
+MOUSE_CLICK_left
