@@ -83,17 +83,6 @@ python -m src.main \  # or `python main.py` if in root
   python -m src.main --mode focus --text "Platform-agnostic typing"
   ```
 
-### Platform-Specific Requirements
-
-- **Linux**: For focus mode, install `xdotool`:
-  ```bash
-  sudo apt-get install xdotool  # Debian/Ubuntu
-  sudo dnf install xdotool      # Fedora/RHEL
-  ```
-
-- **macOS**: Focus mode uses built-in `osascript`
-- **Windows**: Focus mode uses PyAutoGUI (installed via requirements.txt)
-
 ## 🔧 Customization
 
 - **Add Special Keys**: Extend `src/type_simulator/text_typer.py` to handle additional key sequences.
