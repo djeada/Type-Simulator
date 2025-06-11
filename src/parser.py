@@ -24,12 +24,13 @@ class TypeSimulatorParser(argparse.ArgumentParser):
     def __init__(self) -> None:
         super().__init__(
             prog="type_simulator",
-            description="Simulate human-like typing in an editor or window."
+            description="Simulate human-like typing in an editor or window.",
         )
 
         # editorlauncher
         self.add_argument(
-            "-e", "--editor-script",
+            "-e",
+            "--editor-script",
             help=(
                 "Command used to open the editor "
                 "(e.g. 'xterm -e vi' or 'gedit'). "
@@ -40,7 +41,8 @@ class TypeSimulatorParser(argparse.ArgumentParser):
 
         # input file (optional in focus mode)
         self.add_argument(
-            "-f", "--file",
+            "-f",
+            "--file",
             help=(
                 "Path to the text file to type into. "
                 "If omitted, focus mode is enabled."
@@ -62,21 +64,24 @@ class TypeSimulatorParser(argparse.ArgumentParser):
 
         # speed parameters
         self.add_argument(
-            "-s", "--speed",
+            "-s",
+            "--speed",
             type=float,
             default=0.15,
-            help="Typing speed, in seconds per character."
+            help="Typing speed, in seconds per character.",
         )
         self.add_argument(
-            "-v", "--variance",
+            "-v",
+            "--variance",
             type=float,
             default=0.05,
-            help="Random variation in typing speed."
+            help="Random variation in typing speed.",
         )
 
         # direct text input (optional in focus mode)
         self.add_argument(
-            "-t", "--text",
+            "-t",
+            "--text",
             help=(
                 "Text to type directly. "
                 "If omitted, will read from --file if provided."
@@ -89,18 +94,19 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             "--log-level",
             choices=["DEBUG", "INFO", "WARNING", "ERROR"],
             default="INFO",
-            help="Logging verbosity (default: INFO)."
+            help="Logging verbosity (default: INFO).",
         )
 
         # post-type delay
         self.add_argument(
-            "-w", "--wait",
+            "-w",
+            "--wait",
             type=float,
             default=0.0,
             help=(
                 "Seconds to wait after typing completes "
                 "before closing the editor (default: 0)."
-            )
+            ),
         )
 
         # hook to run before launch
@@ -115,10 +121,11 @@ class TypeSimulatorParser(argparse.ArgumentParser):
 
         # version flag (exits immediately, no GUI imports)
         self.add_argument(
-            "-V", "--version",
+            "-V",
+            "--version",
             action="version",
             version=f"%(prog)s {VERSION}",
-            help="Show program’s version number and exit."
+            help="Show program’s version number and exit.",
         )
 
     def parse(self):

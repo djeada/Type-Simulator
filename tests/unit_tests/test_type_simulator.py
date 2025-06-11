@@ -36,14 +36,14 @@ def test_type_simulator_init_modes():
 
 
 def test_type_simulator_text_from_stdin():
-    with mock.patch('sys.stdin', io.StringIO("from stdin")):
-        with mock.patch('sys.stdin.isatty', return_value=False):
+    with mock.patch("sys.stdin", io.StringIO("from stdin")):
+        with mock.patch("sys.stdin.isatty", return_value=False):
             simulator = TypeSimulator(text="from arg")
             assert simulator.text == "from stdin"
 
 
 def test_type_simulator_text_from_file():
-    with tempfile.NamedTemporaryFile(mode='w', delete=False) as tf:
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as tf:
         tf.write("from file")
         tf.flush()
         simulator = TypeSimulator(text=tf.name)
@@ -57,12 +57,12 @@ def test_type_simulator_text_from_nonexistent_file():
 
 
 def test_type_simulator_text_priority():
-    with tempfile.NamedTemporaryFile(mode='w', delete=False) as tf:
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as tf:
         tf.write("from file")
         tf.flush()
         # Stdin should take precedence over file
-        with mock.patch('sys.stdin', io.StringIO("from stdin")):
-            with mock.patch('sys.stdin.isatty', return_value=False):
+        with mock.patch("sys.stdin", io.StringIO("from stdin")):
+            with mock.patch("sys.stdin.isatty", return_value=False):
                 simulator = TypeSimulator(text=tf.name)
                 assert simulator.text == "from stdin"
         os.unlink(tf.name)

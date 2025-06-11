@@ -30,6 +30,7 @@ def main() -> None:
 
     # Process text input first
     from utils.text_input import get_text_content
+
     try:
         text = get_text_content(args.text)
     except ValueError as e:

@@ -53,15 +53,15 @@ class MouseMoveToken(Token):
 
 
 class MouseClickToken(Token):
-    def __init__(self, button: str = 'left', clicks: int = 1, interval: float = 0):
+    def __init__(self, button: str = "left", clicks: int = 1, interval: float = 0):
         self.button = button
         self.clicks = clicks
         self.interval = interval
 
     def execute(self, executor):
-        executor.backend.click(button=self.button,
-                               clicks=self.clicks,
-                               interval=self.interval)
+        executor.backend.click(
+            button=self.button, clicks=self.clicks, interval=self.interval
+        )
 
 
 class CommandParser:
@@ -141,13 +141,17 @@ class CommandParser:
                                 elif len(part) == 1:
                                     keys.append(part)
                                 else:
-                                    logger.warning(f"Invalid key '{part}' in '{{{content}}}'")
+                                    logger.warning(
+                                        f"Invalid key '{part}' in '{{{content}}}'"
+                                    )
                                     valid = False
                                     break
                             if valid and keys:
                                 tokens.append(KeyToken(keys))
                             else:
-                                logger.warning(f"Skipping invalid sequence '{{{content}}}'")
+                                logger.warning(
+                                    f"Skipping invalid sequence '{{{content}}}'"
+                                )
                 i = end + 1
             else:
                 buffer.append(ch)
@@ -178,7 +182,7 @@ class Typist:
         self.typing_speed = typing_speed
         self.typing_variance = typing_variance
         if backend is None:
-            if 'DISPLAY' not in os.environ:
+            if "DISPLAY" not in os.environ:
                 raise RuntimeError(
                     "pyautogui requires a running X server. Please run your tests under Xvfb or set DISPLAY."
                 )
