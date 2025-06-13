@@ -32,7 +32,12 @@ def main() -> None:
     from utils.text_input import get_text_content
 
     try:
-        text = get_text_content(args.text)
+        if args.input is not None:
+            text = args.input
+        elif args.file_input is not None:
+            text = args.file_input.read()
+        else:
+            text = get_text_content(None)  # fallback, should not happen due to parser
     except ValueError as e:
         logging.error(str(e))
         sys.exit(1)
