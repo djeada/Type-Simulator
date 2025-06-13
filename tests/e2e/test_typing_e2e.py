@@ -50,7 +50,7 @@ def test_typing_case(case):
             "src.main",
             "--file",
             str(test_file),
-            "--text",
+            "-i",
             case["text"],
             "--speed",
             str(case.get("speed", TEST_SPEED)),
