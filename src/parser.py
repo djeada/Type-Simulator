@@ -128,6 +128,31 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             help="Show program’s version number and exit.",
         )
 
+        # dry run mode
+        self.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Validate input without executing actions. Useful for checking if commands are parsable.",
+            default=False,
+        )
+
+        # input text
+        text_group = self.add_mutually_exclusive_group(required=True)
+        text_group.add_argument(
+            "-i",
+            "--input",
+            help="Input text to be typed (overrides file).",
+            type=str,
+            default=None,
+        )
+        text_group.add_argument(
+            "-F",
+            "--file-input",
+            help="File to read input text from (overrides --input).",
+            type=argparse.FileType("r"),
+            default=None,
+        )
+
     def parse(self):
         """Parse and return command-line arguments."""
         return self.parse_args()

@@ -1,0 +1,62 @@
+[
+  {
+    "name": "file not found",
+    "mode": "GUI",
+    "file": "NONEXISTENT",
+    "editor_cmd": "vi",
+    "text": "hello",
+    "is_valid": false,
+    "errors": ["File not found"],
+    "warnings": []
+  },
+  {
+    "name": "not a file",
+    "mode": "GUI",
+    "file": "TEMPDIR",
+    "editor_cmd": "vi",
+    "text": "hello",
+    "is_valid": false,
+    "errors": ["Not a file"],
+    "warnings": []
+  },
+  {
+    "name": "editor not found",
+    "mode": "GUI",
+    "file": "TEMPFILE",
+    "editor_cmd": "notarealeditor",
+    "text": "hello",
+    "is_valid": false,
+    "errors": ["Editor command not found"],
+    "warnings": []
+  },
+  {
+    "name": "empty text",
+    "mode": "GUI",
+    "file": "TEMPFILE",
+    "editor_cmd": "vi",
+    "text": "",
+    "is_valid": false,
+    "errors": ["Input text is empty"],
+    "warnings": []
+  },
+  {
+    "name": "invalid sequence warning",
+    "mode": "GUI",
+    "file": "TEMPFILE",
+    "editor_cmd": "vi",
+    "text": "A{INVALID_KEY}B",
+    "is_valid": true,
+    "errors": [],
+    "warnings": ["Skipping invalid sequence"]
+  },
+  {
+    "name": "success",
+    "mode": "GUI",
+    "file": "TEMPFILE",
+    "editor_cmd": "vi",
+    "text": "Hello {WAIT_1.5} World",
+    "is_valid": true,
+    "errors": [],
+    "warnings": []
+  }
+]
