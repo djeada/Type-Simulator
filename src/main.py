@@ -48,9 +48,34 @@ def main() -> None:
         typing_variance=args.variance,
         wait=args.wait,
         mode=args.mode,
-        pre_launch_cmd=args.pre_launch_cmd,
     )
-    simulator.run()
+
+    if args.dry_run:
+        from type_simulator.validation import validate_inputs
+
+        is_valid, errors, warnings = validate_inputs(
+            args.mode, args.file, args.editor_script, text
+        )
+        if is_valid:
+            logging.info("Dry run validation successful")
+            if warnings:
+                for w in warnings:
+                    logging.warning(f"Validation warning: {w}")
+            sys.exit(0)
+        else:
+            for e in errors:
+                logging.error(f"Validation error: {e}")
+            for w in warnings:
+                logging.warning(f"Validation warning: {w}")
+            logging.error("Dry run validation failed")
+            sys.exit(1)
+
+    # Normal execution mode
+    try:
+        simulator.run()
+    except Exception as e:
+        logging.error(f"Error during execution: {str(e)}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
