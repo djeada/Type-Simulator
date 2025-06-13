@@ -66,4 +66,4 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
-          files: ./dist/**
+          files: ./dist/*
