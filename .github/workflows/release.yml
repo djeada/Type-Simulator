@@ -1,5 +1,9 @@
 name: Build and Release
 
+permissions:
+  contents: write       # allow creating releases
+  packages: write       # allow publishing packages if needed
+
 on:
   push:
     tags:
@@ -11,6 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -29,20 +34,11 @@ jobs:
         run: chmod +x build/*.sh
 
       - name: Build for platform
-        run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            ./build/build_all.sh
-          elif [ "$RUNNER_OS" == "macOS" ]; then
-            ./build/build_all.sh
-          elif [ "$RUNNER_OS" == "Windows" ]; then
-            python build/build_all.sh
-          fi
-        shell: bash
+        run: python build/build_all.py
 
       - name: Archive build artifacts
         run: |
-          mkdir -p dist
-          cp dist/* dist/ 2>/dev/null || true
+          ls -l dist || true
 
       - name: Upload Release Artifacts
         uses: actions/upload-artifact@v4
@@ -53,13 +49,21 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-      - name: Download artifacts
+
+      - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: ./dist
+
+      - name: List downloaded files
+        run: ls -R ./dist
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
           files: ./dist/**
