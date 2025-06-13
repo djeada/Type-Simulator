@@ -11,13 +11,12 @@ BIN_NAME = "type_simulator"
 ASSUME_YES = "--assume-yes-for-downloads"
 
 SUPPORTED_PLATFORMS = {
-    "linux":   {"args": ["--onefile"],                         "suffix": "_linux"},
-    "darwin":  {"args": ["--macos-create-app-bundle"],         "suffix": "_macos", "archive": True},
-    "windows": {"args": ["--onefile"],                         "suffix": "_windows.exe"},
+    "linux":   {"args": ["--onefile"],               "suffix": "_linux"},
+    "darwin":  {"args": ["--onefile"],               "suffix": "_macos"},
+    "windows": {"args": ["--onefile"],               "suffix": "_windows.exe"},
 }
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-
 
 def detect_platform() -> str:
     s = platform.system().lower()
@@ -57,33 +56,20 @@ def build_with_nuitka(nuitka: Path, src: Path, dist_dir: Path, extra: list[str])
     subprocess.check_call(cmd)
 
 
-def collect_artifacts(dist_dir: Path, bin_name: str, platform_key: str, project_root: Path) -> list[Path]:
+def collect_artifacts(dist_dir: Path, bin_name: str, platform_key: str) -> list[Path]:
     info = SUPPORTED_PLATFORMS[platform_key]
     suffix = info["suffix"]
     artifacts: list[Path] = []
 
-    if platform_key in ("linux", "windows"):
-        exe = next(dist_dir.glob("main*"))
-        target = dist_dir / f"{bin_name}{suffix}"
-        exe.rename(target)
-        artifacts.append(target)
+    # Find the single executable produced by --onefile
+    exe = next(dist_dir.glob("main*"), None)
+    if exe is None:
+        logging.error("No executable found for platform %s", platform_key)
+        sys.exit(1)
 
-    else:  # darwin
-        app = next(dist_dir.glob("*.app"))
-        renamed = dist_dir / f"{bin_name}{suffix}.app"
-        app.rename(renamed)
-
-        if info.get("archive"):
-            zip_path = dist_dir / f"{bin_name}{suffix}.zip"
-            shutil.make_archive(
-                str(zip_path.with_suffix('')), 'zip',
-                root_dir=dist_dir, base_dir=renamed.name
-            )
-            logging.info("Created archive: %s", zip_path)
-            artifacts.append(zip_path)
-            shutil.rmtree(renamed)
-        else:
-            artifacts.append(renamed)
+    target = dist_dir / f"{bin_name}{suffix}"
+    exe.rename(target)
+    artifacts.append(target)
 
     logging.info("Collected artifacts: %s", artifacts)
     return artifacts
@@ -135,7 +121,7 @@ def main():
     extra_args = SUPPORTED_PLATFORMS[plat]["args"]
 
     build_with_nuitka(nuitka, args.src, args.dist, extra_args)
-    artifacts = collect_artifacts(args.dist, args.bin_name, plat, project_root)
+    artifacts = collect_artifacts(args.dist, args.bin_name, plat)
 
     prune_dist(args.dist, artifacts)
     clean_root_artifacts(project_root)
