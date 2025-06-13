@@ -11,9 +11,9 @@ BIN_NAME = "type_simulator"
 ASSUME_YES = "--assume-yes-for-downloads"
 
 SUPPORTED_PLATFORMS = {
-    "linux":    {"args": ["--onefile"],                          "suffix": "_linux"},
-    "darwin":   {"args": ["--macos-create-app-bundle"],          "suffix": "_macos", "archive": True},
-    "windows":  {"args": ["--onefile"],                          "suffix": "_windows.exe"},
+    "linux":   {"args": ["--onefile"],                         "suffix": "_linux"},
+    "darwin":  {"args": ["--macos-create-app-bundle"],         "suffix": "_macos", "archive": True},
+    "windows": {"args": ["--onefile"],                         "suffix": "_windows.exe"},
 }
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -57,7 +57,7 @@ def build_with_nuitka(nuitka: Path, src: Path, dist_dir: Path, extra: list[str])
     subprocess.check_call(cmd)
 
 
-def collect_artifacts(dist_dir: Path, bin_name: str, platform_key: str) -> list[Path]:
+def collect_artifacts(dist_dir: Path, bin_name: str, platform_key: str, project_root: Path) -> list[Path]:
     info = SUPPORTED_PLATFORMS[platform_key]
     suffix = info["suffix"]
     artifacts: list[Path] = []
@@ -98,6 +98,17 @@ def prune_dist(dist_dir: Path, keep: list[Path]) -> None:
                 item.unlink()
 
 
+def clean_root_artifacts(project_root: Path) -> None:
+    # Remove any file not starting with BIN_NAME + '_'
+    for f in project_root.iterdir():
+        if f.is_file() and not f.name.startswith(f"{BIN_NAME}_"):
+            try:
+                f.unlink()
+                logging.info("Removed root artifact: %s", f)
+            except Exception:
+                pass
+
+
 def verify_dist(dist_dir: Path, expected: int) -> None:
     remaining = list(dist_dir.iterdir())
     if len(remaining) != expected:
@@ -115,6 +126,7 @@ def parse_args() -> argparse.Namespace:
 
 def main():
     args = parse_args()
+    project_root = args.src.parent.parent
     plat = detect_platform()
     logging.info("=== Building for %s ===", plat.capitalize())
 
@@ -123,8 +135,10 @@ def main():
     extra_args = SUPPORTED_PLATFORMS[plat]["args"]
 
     build_with_nuitka(nuitka, args.src, args.dist, extra_args)
-    artifacts = collect_artifacts(args.dist, args.bin_name, plat)
+    artifacts = collect_artifacts(args.dist, args.bin_name, plat, project_root)
+
     prune_dist(args.dist, artifacts)
+    clean_root_artifacts(project_root)
     verify_dist(args.dist, expected=len(artifacts))
 
     logging.info("%s build complete!", plat.capitalize())
