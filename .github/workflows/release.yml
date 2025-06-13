@@ -1,0 +1,65 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Make build scripts executable (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: chmod +x build/*.sh
+
+      - name: Build for platform
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            ./build/build_all.sh
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            ./build/build_all.sh
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            python build/build_all.sh
+          fi
+        shell: bash
+
+      - name: Archive build artifacts
+        run: |
+          mkdir -p dist
+          cp dist/* dist/ 2>/dev/null || true
+
+      - name: Upload Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: type-simulator-${{ runner.os }}
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./dist
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./dist/**
