@@ -10,15 +10,14 @@ from pathlib import Path
 BIN_NAME = "type_simulator"
 ASSUME_YES = "--assume-yes-for-downloads"
 
-# Use unified --mode options: onefile for Linux/Windows, app bundle for macOS
+# Modes: onefile for Linux/Windows, app bundle for macOS (needed for Foundation).
 SUPPORTED_PLATFORMS = {
     "linux":   {"mode": "onefile", "suffix": "_linux"},
-    "darwin":  {"mode": "app",     "suffix": "_macos.app"},
+    "darwin":  {"mode": "app",     "suffix": "_macos"},
     "windows": {"mode": "onefile", "suffix": "_windows.exe"},
 }
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-
 
 def detect_platform() -> str:
     s = platform.system().lower()
@@ -63,7 +62,7 @@ def collect_artifacts(dist_dir: Path, bin_name: str, platform_key: str) -> list[
     artifacts: list[Path] = []
 
     if platform_key in ("linux", "windows"):
-        # onefile produces a single executable (usually *.bin on Linux, *.exe on Windows)
+        # onefile produces a single executable file
         exe = next(p for p in dist_dir.iterdir() if p.is_file())
         target = dist_dir / f"{bin_name}{suffix}"
         exe.rename(target)
@@ -75,8 +74,14 @@ def collect_artifacts(dist_dir: Path, bin_name: str, platform_key: str) -> list[
         if app_bundle is None:
             logging.error("No .app bundle found in %s", dist_dir)
             sys.exit(1)
+        # Locate the Mach-O binary inside
+        binary_dir = app_bundle / "Contents" / "MacOS"
+        exe_inside = next(binary_dir.iterdir(), None)
+        if exe_inside is None:
+            logging.error("No executable inside .app bundle %s", app_bundle)
+            sys.exit(1)
         target = dist_dir / f"{bin_name}{suffix}"
-        app_bundle.rename(target)
+        exe_inside.rename(target)
         artifacts.append(target)
 
     logging.info("Collected artifacts: %s", artifacts)
