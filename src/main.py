@@ -33,21 +33,25 @@ def main() -> None:
 
     try:
         if args.input is not None:
-            text = args.input
-        elif args.file_input is not None:
-            text = args.file_input.read()
+            text = get_text_content(args.input)
         else:
-            text = get_text_content(None)  # fallback, should not happen due to parser
+            text = get_text_content(None)  # fallback to STDIN
     except ValueError as e:
         logging.error(str(e))
         sys.exit(1)
+
+    # Determine output file for direct mode
+    output_file = args.output if args.mode == "direct" else None
+    if args.mode == "direct" and not output_file:
+        logging.error("In direct mode, --output must be specified.")
+        sys.exit(2)
 
     # import the simulator only when actually running
     from type_simulator.type_simulator import TypeSimulator
 
     simulator = TypeSimulator(
         editor_script_path=args.editor_script,
-        file_path=args.file,
+        file_path=output_file,  # Only used in direct mode
         text=text,  # Already processed text
         typing_speed=args.speed,
         typing_variance=args.variance,

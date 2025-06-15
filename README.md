@@ -50,11 +50,11 @@ You can also customize the build by editing `build/config.json` to target differ
 Run via Python module interface:
 
 ```bash
-# Basic mode with file output
-python -m src.main \  # or `python main.py` if in root
-  --file <path/to/output.txt> \  # destination file (optional)
-  --text "Your text here" \   # direct text input
-  --mode <gui|terminal|direct|focus> \  # typing mode (default: gui)
+# Basic mode with file output (direct mode)
+python -m src.main \
+  --output <path/to/output.txt> \  # destination file (only for direct mode)
+  --input "Your text here"   # input: file path or literal text
+  --mode direct \
   --speed 0.1 \                # seconds/char (default: 0.15)
   --variance 0.02 \            # typing variance (default: 0.05)
   --log-level DEBUG            # log verbosity (optional)
@@ -62,26 +62,25 @@ python -m src.main \  # or `python main.py` if in root
 
 ### Examples
 
-- **GUI Mode** (default): Types into `vi` in an X window:
-  ```bash
-  python -m src.main --file demo.txt --text "Hello, World!"
-  ```
+```sh
+python -m src.main --mode direct --output demo.txt --input "Hello, World!"
 
-- **Terminal Mode**: Open a shell and type commands:
-  ```bash
-  python -m src.main --mode terminal --file demo.txt --text "ls -la"
-  ```
+python -m src.main --mode terminal --input "ls -la"
 
-- **Direct Mode**: Write text directly to file:
-  ```bash
-  python -m src.main --mode direct --file file.txt --text "Quick write"
-  ```
+python -m src.main --mode direct --output file.txt --input "Quick write"
 
-- **Focus Mode**: Type into the currently focused window:
-  ```bash
-  # uses pyautogui
-  python -m src.main --mode focus --text "Platform-agnostic typing"
-  ```
+python -m src.main --mode focus --input "Platform-agnostic typing"
+
+# Input from file
+python -m src.main --mode direct --output demo.txt --input demo_macro.txt
+
+# Pipe mode (STDIN, requires --output in direct mode)
+cat demo_macro.txt | python -m src.main --mode direct --output demo.txt
+```
+
+**Note:**
+- The `--input` flag accepts either a file path or literal text. If the value is a valid file path, its contents will be used; otherwise, the value is treated as literal text.
+- If `--input` is omitted, input will be read from STDIN (pipe mode). In direct mode, `--output` is required.
 
 ## 🔧 Customization
 
