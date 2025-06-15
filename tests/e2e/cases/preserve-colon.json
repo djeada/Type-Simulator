@@ -1,0 +1,6 @@
+{
+  "name": "preserve-colon",
+  "text": "Key: Value\n12:30\n:leading\ntrailing:\na:b:c\ncolon: in: the: middle",
+  "expected": "Key: Value\n12:30\n:leading\ntrailing:\na:b:c\ncolon: in: the: middle",
+  "editor": "vi"
+}

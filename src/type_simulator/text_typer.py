@@ -19,11 +19,24 @@ class TextToken(Token):
         self.text = text
 
     def execute(self, executor):
+        # Only use clipboard-paste for problematic characters
+        PROBLEMATIC = {":", "<", ">", "?", "|", "@", "#"}
+        try:
+            import pyperclip
+            import pyautogui
+        except ImportError:
+            pyperclip = None
+            pyautogui = None
         for ch in self.text:
             interval = executor.typing_speed + (
                 executor.typing_variance * (2 * random.random() - 1)
             )
-            executor.backend.write(ch, interval=interval)
+            if ch in PROBLEMATIC and pyperclip and pyautogui:
+                pyperclip.copy(ch)
+                pyautogui.hotkey("ctrl", "v")
+                time.sleep(0.1)
+            else:
+                executor.backend.write(ch, interval=interval)
 
 
 class WaitToken(Token):

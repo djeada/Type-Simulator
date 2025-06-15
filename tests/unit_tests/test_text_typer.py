@@ -84,6 +84,47 @@ def test_parse_invalid_sequence_skips(caplog):
     assert "Skipping invalid sequence" in caplog.text
 
 
+def test_preserve_angle_bracket():
+    parser = CommandParser()
+    # Beginning
+    tokens = parser.parse("<abc")
+    assert len(tokens) == 1
+    assert isinstance(tokens[0], TextToken)
+    assert tokens[0].text == "<abc"
+    # Middle
+    tokens = parser.parse("a < b")
+    assert len(tokens) == 1
+    assert tokens[0].text == "a < b"
+    # End
+    tokens = parser.parse("abc<")
+    assert len(tokens) == 1
+    assert tokens[0].text == "abc<"
+    # Multiple
+    tokens = parser.parse("<a < b<")
+    assert len(tokens) == 1
+    assert tokens[0].text == "<a < b<"
+
+
+def test_preserve_colon():
+    parser = CommandParser()
+    # Key-value
+    tokens = parser.parse("Key: Value")
+    assert len(tokens) == 1
+    assert tokens[0].text == "Key: Value"
+    # Timestamp
+    tokens = parser.parse("12:30")
+    assert len(tokens) == 1
+    assert tokens[0].text == "12:30"
+    # Multiple colons
+    tokens = parser.parse("a:b:c")
+    assert len(tokens) == 1
+    assert tokens[0].text == "a:b:c"
+    # Colon at start/end
+    tokens = parser.parse(":start and end:")
+    assert len(tokens) == 1
+    assert tokens[0].text == ":start and end:"
+
+
 # Typist tests
 
 

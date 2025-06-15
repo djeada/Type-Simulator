@@ -1,0 +1,6 @@
+{
+  "name": "preserve-angle-bracket",
+  "text": "a < b\n<start>\nend<\nabc<def<ghi",
+  "expected": "a < b\n<start>\nend<\nabc<def<ghi",
+  "editor": "vi"
+}
