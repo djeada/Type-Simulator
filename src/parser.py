@@ -39,17 +39,6 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             default=None,
         )
 
-        # input file (optional in focus mode)
-        self.add_argument(
-            "-f",
-            "--file",
-            help=(
-                "Path to the text file to type into. "
-                "If omitted, focus mode is enabled."
-            ),
-            required=False,
-        )
-
         # typing mode
         self.add_argument(
             "--mode",
@@ -78,15 +67,23 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             help="Random variation in typing speed.",
         )
 
-        # direct text input (optional in focus mode)
+        # input text (single flag only)
         self.add_argument(
-            "-t",
-            "--text",
-            help=(
-                "Text to type directly. "
-                "If omitted, will read from --file if provided."
-            ),
+            "-i",
+            "--input",
+            help="Input text to be typed. If a valid file path, reads from file; otherwise, treats as literal text. Required unless input is piped via STDIN.",
+            type=str,
             required=False,
+            default=None,
+        )
+
+        # output file (only for direct mode)
+        self.add_argument(
+            "-o",
+            "--output",
+            help="Output file path (only used in direct mode). Optional. If not provided in direct mode, will raise an error.",
+            required=False,
+            default=None,
         )
 
         # logging verbosity
@@ -134,23 +131,6 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             action="store_true",
             help="Validate input without executing actions. Useful for checking if commands are parsable.",
             default=False,
-        )
-
-        # input text
-        text_group = self.add_mutually_exclusive_group(required=True)
-        text_group.add_argument(
-            "-i",
-            "--input",
-            help="Input text to be typed (overrides file).",
-            type=str,
-            default=None,
-        )
-        text_group.add_argument(
-            "-F",
-            "--file-input",
-            help="File to read input text from (overrides --input).",
-            type=argparse.FileType("r"),
-            default=None,
         )
 
     def parse(self):

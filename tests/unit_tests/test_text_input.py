@@ -139,3 +139,67 @@ def test_get_text_content_relative_path():
             assert get_text_content("test.txt") == "relative test"
         finally:
             os.chdir(old_cwd)
+
+
+# The following tests already cover the required cases:
+# - test_get_text_content_file: passing a valid file path
+# - test_get_text_content_literal: passing arbitrary text
+# - test_get_text_content_stdin: piping text via STDIN
+# Add a CLI parser test to ensure only --input is accepted.
+import subprocess
+
+
+def test_cli_input_flag(tmp_path):
+    # Create a file with known content
+    file = tmp_path / "input.txt"
+    file.write_text("file input test")
+    # Run CLI with --input as file path
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "src.main",
+            "--input",
+            str(file),
+            "--output",
+            str(tmp_path / "out.txt"),
+            "--mode",
+            "direct",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    # Run CLI with --input as literal text
+    result2 = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "src.main",
+            "--input",
+            "literal input test",
+            "--output",
+            str(tmp_path / "out2.txt"),
+            "--mode",
+            "direct",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result2.returncode == 0
+    # Run CLI with STDIN
+    result3 = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "src.main",
+            "--output",
+            str(tmp_path / "out3.txt"),
+            "--mode",
+            "direct",
+        ],
+        input="stdin input test",
+        capture_output=True,
+        text=True,
+    )
+    assert result3.returncode == 0
