@@ -71,31 +71,33 @@ class Token(ABC):
     def execute(self, executor: 'Typist'): pass
 
 class TextToken(Token):
-    PROBLEMATIC = set(":<>?|@#")
-    def __init__(self, text: str): self.text = text
-    def execute(self, executor: 'Typist'):
+    # add the braces so they never go through plain write()
+    PROBLEMATIC = set(":<>?|@#{}")
+
+    def execute(self, executor:'Typist'):
         for ch in self.text:
-            interval = max(0, executor.typing_speed + executor.typing_variance * (2*random.random()-1))
-            try:
-                if ch in self.PROBLEMATIC:
-                    # First try direct unicode injection with pynput
-                    if executor.pynput:
-                        try:
-                            executor.pynput.type(ch)
-                            time.sleep(0.02)
-                            continue
-                        except Exception:
-                            logger.warning(f"Pynput typing failed for '{ch}', falling back")
-                    # Next clipboard fallback
-                    if executor.clipboard:
-                        executor.clipboard.copy(ch)
-                        executor.backend.hotkey("ctrl", "v")
-                        time.sleep(0.05)
-                        continue
-                # Default typing
-                executor.backend.write(ch, interval=interval)
-            except Exception as e:
-                logger.error(f"Typing '{ch}' failed: {e}")
+            interval = max(
+                0,
+                executor.typing_speed +
+                executor.typing_variance * (2*random.random()-1)
+            )
+
+            if ch in self.PROBLEMATIC:
+                # 1 Try the safest path first – clipboard paste
+                if executor.clipboard:
+                    executor.clipboard.copy(ch)
+                    executor.backend.hotkey('ctrl', 'v')
+                    time.sleep(0.05)
+                    continue
+                # 2 Fallback – direct unicode via pynput
+                if executor.pynput:
+                    executor.pynput.type(ch)
+                    time.sleep(0.02)
+                    continue
+
+            # normal characters
+            executor.backend.write(ch, interval=interval)
+
 
 class WaitToken(Token):
     def __init__(self, duration: float): self.duration = duration
