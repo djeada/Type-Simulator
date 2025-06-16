@@ -84,16 +84,51 @@ class Token(ABC):
 class TextToken(Token):
     PROBLEMATIC = set(":<>?|@#{}")
 
-    PASTE_COMBOS = (
-        ("shift", "insert"),    # Linux terminals and X11 fallback
-        ("ctrl", "v"),          # Windows / most Linux apps
-        ("command", "v"),       # macOS
+    # ordered by preference
+    PASTE_CANDIDATES = (
+        ("primary",   ("shift", "insert")),        # X11 & Linux terminals
+        ("clipboard", ("ctrl", "v")),              # Win / X11 / many apps
+        ("clipboard", ("command", "v")),           # macOS
     )
-    PASTE_SETTLE = 0.12        # seconds to wait after each paste hot-key
+    PASTE_SETTLE = 0.12       # seconds to wait after a hot-key
 
     def __init__(self, text: str):
         self.text = text
 
+    # ---------------- internal helpers ----------------
+    @staticmethod
+    def _copy_to_primary_x11(text: str) -> bool:
+        """
+        Low-level helper: copy to PRIMARY using xclip/xsel if present.
+        Returns True on success.
+        """
+        for tool, args in (
+            ("xclip", ["xclip", "-selection", "primary"]),
+            ("xsel",  ["xsel",  "--primary", "--input"]),
+        ):
+            if shutil.which(tool):
+                try:
+                    proc = subprocess.Popen(args, stdin=subprocess.PIPE)
+                    proc.communicate(input=text.encode())
+                    return proc.returncode == 0
+                except Exception:
+                    pass
+        return False
+
+    @staticmethod
+    def _type_unicode_linux(ch: str, backend):
+        """
+        Layout-agnostic Unicode hex input: Ctrl+Shift+U, hex, Space
+        Works in virtually every Gtk/Qt/terminal program.
+        """
+        hexcode = format(ord(ch), "x")
+        backend.hotkey("ctrl", "shift", "u")
+        time.sleep(0.05)
+        backend.write(hexcode)
+        backend.press("space")
+        time.sleep(0.05)
+
+    # ---------------- main execute ----------------
     def execute(self, executor: "Typist"):
         for ch in self.text:
             interval = max(
@@ -102,46 +137,52 @@ class TextToken(Token):
                 + executor.typing_variance * (2 * random.random() - 1),
             )
 
-            # ───── clipboard route ─────
-            if ch in self.PROBLEMATIC and executor.clipboard:
-                prev = executor.clipboard.paste()
-                executor.clipboard.copy(ch)
-
-                pasted = False
-                for combo in self.PASTE_COMBOS:
-                    try:
-                        logger.debug("Typing %r via clipboard (%s)", ch, "+".join(combo))
-                        executor.backend.hotkey(*combo)
-                        time.sleep(self.PASTE_SETTLE)
-                        pasted = True
-                        break
-                    except Exception as e:
-                        logger.debug("Hot-key %s failed: %s", "+".join(combo), e)
-
-                # restore user clipboard
-                try:
-                    executor.clipboard.copy(prev)
-                except Exception:
-                    pass
-
-                if pasted:
-                    continue   # success – go on to next character
+            if ch in self.PROBLEMATIC:
+                # Try every paste candidate in order
+                for target, hotkey in self.PASTE_CANDIDATES:
+                    if target == "clipboard" and executor.clipboard:
+                        prev = executor.clipboard.paste()
+                        executor.clipboard.copy(ch)
+                        logger.debug("Typing %r via %s (%s)",
+                                     ch, target, "+".join(hotkey))
+                        try:
+                            executor.backend.hotkey(*hotkey)
+                            time.sleep(self.PASTE_SETTLE)
+                            executor.clipboard.copy(prev)
+                            break                       # success
+                        except Exception as e:
+                            logger.debug("Hot-key failed: %s", e)
+                            executor.clipboard.copy(prev)
+                    elif target == "primary":
+                        if self._copy_to_primary_x11(ch):
+                            logger.debug("Typing %r via PRIMARY (+Shift-Insert)",
+                                         ch)
+                            try:
+                                executor.backend.hotkey(*hotkey)
+                                time.sleep(self.PASTE_SETTLE)
+                                break                   # success
+                            except Exception as e:
+                                logger.debug("Shift-Insert failed: %s", e)
                 else:
-                    logger.debug("All paste combos failed for %r", ch)
-
-            # ───── pynput route ─────
-            if ch in self.PROBLEMATIC and executor.pynput:
-                try:
-                    logger.debug("Typing %r via pynput", ch)
-                    executor.pynput.type(ch)
-                    time.sleep(0.02)
+                    # No clipboard route worked – fall back
+                    if sys.platform.startswith("linux"):
+                        logger.debug("Typing %r via Unicode hex input", ch)
+                        self._type_unicode_linux(ch, executor.backend)
+                    elif executor.pynput:
+                        logger.debug("Typing %r via pynput", ch)
+                        executor.pynput.type(ch)
+                        time.sleep(0.02)
+                    else:
+                        logger.debug("Typing %r via write()", ch)
+                        executor.backend.write(ch, interval=interval)
                     continue
-                except Exception as e:
-                    logger.debug("pynput failed for %r: %s", ch, e)
+                # paste path succeeded – next character
+                continue
 
-            # ───── final fallback – write() ─────
+            # ordinary characters
             logger.debug("Typing %r via write()", ch)
             executor.backend.write(ch, interval=interval)
+
 
 class WaitToken(Token):
     def __init__(self, seconds: float): self.seconds = seconds
