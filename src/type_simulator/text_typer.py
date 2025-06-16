@@ -1,244 +1,251 @@
-import re
-import time
-import logging
-import random
+"""
+robust_typist.py  –  keyboard-layout–proof virtual typist
+"""
+
 import os
+import re
+import sys
+import time
+import random
 import shutil
+import logging
 import subprocess
 from abc import ABC, abstractmethod
 
-# Configure logging
-tlogging = logging.getLogger(__name__)
+# ─────────────────────────── Logging ───────────────────────────
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    level=logging.INFO,                      # flip to DEBUG for per-char trace
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# Clipboard Strategy Pattern
+# ─────────────────────── Clipboard Strategies ───────────────────────
 class ClipboardStrategy(ABC):
     @abstractmethod
-    def copy(self, text: str): pass
+    def copy(self, text: str) -> None: ...
     @abstractmethod
-    def paste(self) -> str: pass
+    def paste(self) -> str: ...
 
 class PyperclipClipboard(ClipboardStrategy):
     def __init__(self):
-        import pyperclip
-        self._clip = pyperclip
-        try:
-            self._clip.copy("")
-            _ = self._clip.paste()
-        except Exception as e:
-            raise RuntimeError(f"Pyperclip unavailable: {e}")
-
+        import pyperclip as pc
+        self._clip = pc
+        self._clip.copy("")
+        _ = self._clip.paste()
     def copy(self, text: str): self._clip.copy(text)
-    def paste(self) -> str: return self._clip.paste()
+    def paste(self) -> str:   return self._clip.paste()
 
 class PlatformClipboard(ClipboardStrategy):
     def __init__(self):
-        self.commands = self._detect_commands()
-        if not self.commands:
-            raise RuntimeError("No platform clipboard commands found")
-
-    def _detect_commands(self):
-        cmds = {}
+        self.cmds = self._detect()
+        if not self.cmds:
+            raise RuntimeError("No platform clipboard commands")
+    @staticmethod
+    def _detect():
+        c = {}
         if shutil.which("pbcopy") and shutil.which("pbpaste"):
-            cmds['copy'] = ['pbcopy']; cmds['paste'] = ['pbpaste']
+            c["copy"], c["paste"] = ["pbcopy"], ["pbpaste"]
         elif shutil.which("xclip"):
-            cmds['copy'] = ['xclip', '-selection', 'clipboard']; cmds['paste'] = ['xclip', '-selection', 'clipboard', '-o']
+            c["copy"] = ["xclip", "-selection", "clipboard"]
+            c["paste"] = ["xclip", "-selection", "clipboard", "-o"]
         elif shutil.which("xsel"):
-            cmds['copy'] = ['xsel', '--clipboard', '--input']; cmds['paste'] = ['xsel', '--clipboard', '--output']
-        elif os.name == 'nt' and shutil.which('clip'):
-            cmds['copy'] = ['clip']
-        return cmds
-
+            c["copy"] = ["xsel", "--clipboard", "--input"]
+            c["paste"] = ["xsel", "--clipboard", "--output"]
+        elif os.name == "nt" and shutil.which("clip"):
+            c["copy"] = ["clip"]                # no fast native paste on Win
+        return c
     def copy(self, text: str):
-        if 'copy' in self.commands:
-            proc = subprocess.Popen(self.commands['copy'], stdin=subprocess.PIPE)
-            proc.communicate(input=text.encode())
-        else:
-            raise RuntimeError("Platform copy command not available")
-
+        if "copy" not in self.cmds:
+            raise RuntimeError("No copy cmd")
+        proc = subprocess.Popen(self.cmds["copy"], stdin=subprocess.PIPE)
+        proc.communicate(input=text.encode())
     def paste(self) -> str:
-        if 'paste' in self.commands:
-            return subprocess.check_output(self.commands['paste']).decode()
-        raise RuntimeError("Platform paste command not available")
+        if "paste" not in self.cmds:
+            raise RuntimeError("No paste cmd")
+        return subprocess.check_output(self.cmds["paste"]).decode()
 
-# Token definitions
+class TkClipboard(ClipboardStrategy):
+    def __init__(self):
+        import tkinter as tk
+        self._tk = tk.Tk(); self._tk.withdraw()
+        self.copy(""); _ = self.paste()
+    def copy(self, text: str):
+        self._tk.clipboard_clear()
+        self._tk.clipboard_append(text)
+        self._tk.update()
+    def paste(self) -> str:
+        self._tk.update(); return self._tk.clipboard_get()
+
+# ─────────────────────────── Token types ───────────────────────────
 class Token(ABC):
     @abstractmethod
-    def execute(self, executor: 'Typist'): pass
+    def execute(self, executor: "Typist") -> None: ...
 
 class TextToken(Token):
-    # add the braces so they never go through plain write()
     PROBLEMATIC = set(":<>?|@#{}")
+    def __init__(self, text: str): self.text = text
 
-    def execute(self, executor:'Typist'):
+    def _paste_keys(self):
+        return ("command", "v") if sys.platform == "darwin" else ("ctrl", "v")
+
+    def execute(self, executor: "Typist"):
         for ch in self.text:
-            interval = max(
-                0,
-                executor.typing_speed +
-                executor.typing_variance * (2*random.random()-1)
-            )
+            interval = max(0, executor.typing_speed +
+                              executor.typing_variance * (2*random.random()-1))
 
-            if ch in self.PROBLEMATIC:
-                # 1 Try the safest path first – clipboard paste
-                if executor.clipboard:
+            # ───── clipboard path ─────
+            if ch in self.PROBLEMATIC and executor.clipboard:
+                try:
+                    prev = executor.clipboard.paste()
                     executor.clipboard.copy(ch)
-                    executor.backend.hotkey('ctrl', 'v')
+                    logger.debug("Typing %r via clipboard", ch)
+                    executor.backend.hotkey(*self._paste_keys())
                     time.sleep(0.05)
+                    executor.clipboard.copy(prev)
                     continue
-                # 2 Fallback – direct unicode via pynput
-                if executor.pynput:
+                except Exception as e:
+                    logger.debug("Clipboard path failed for %r: %s", ch, e)
+
+            # ───── pynput path ─────
+            if ch in self.PROBLEMATIC and executor.pynput:
+                try:
+                    logger.debug("Typing %r via pynput", ch)
                     executor.pynput.type(ch)
                     time.sleep(0.02)
                     continue
+                except Exception as e:
+                    logger.debug("pynput path failed for %r: %s", ch, e)
 
-            # normal characters
+            # ───── default pyautogui write ─────
+            logger.debug("Typing %r via write()", ch)
             executor.backend.write(ch, interval=interval)
 
-
 class WaitToken(Token):
-    def __init__(self, duration: float): self.duration = duration
-    def execute(self, executor: 'Typist'): time.sleep(self.duration)
+    def __init__(self, seconds: float): self.seconds = seconds
+    def execute(self, executor): time.sleep(self.seconds)
 
 class KeyToken(Token):
     def __init__(self, keys: list[str]): self.keys = keys
-    def execute(self, executor: 'Typist'):
-        try: executor.backend.hotkey(*self.keys)
-        except Exception as e: logger.error(f"Hotkey {self.keys} failed: {e}")
+    def execute(self, executor):
+        logger.debug("Hotkey %s", "+".join(self.keys))
+        executor.backend.hotkey(*self.keys)
 
 class MouseMoveToken(Token):
-    def __init__(self, x: int, y: int, duration: float = 0): self.x, self.y, self.duration = x, y, duration
-    def execute(self, executor: 'Typist'):
-        try: executor.backend.moveTo(self.x, self.y, duration=self.duration)
-        except Exception as e: logger.error(f"MoveTo ({self.x},{self.y}) failed: {e}")
+    def __init__(self, x: int, y: int, dur: float = 0):
+        self.x,self.y,self.dur = x,y,dur
+    def execute(self, executor):
+        logger.debug("Mouse move to (%d,%d)", self.x,self.y)
+        executor.backend.moveTo(self.x, self.y, duration=self.dur)
 
 class MouseClickToken(Token):
-    def __init__(self, button: str = "left", clicks: int = 1, interval: float = 0):
-        self.button, self.clicks, self.interval = button, clicks, interval
-    def execute(self, executor: 'Typist'):
-        try: executor.backend.click(button=self.button, clicks=self.clicks, interval=self.interval)
-        except Exception as e: logger.error(f"Click {self.button} failed: {e}")
+    def __init__(self, btn="left", clicks=1, interval=0):
+        self.btn,self.clicks,self.interval = btn,clicks,interval
+    def execute(self, executor):
+        logger.debug("Mouse click %s ×%d", self.btn, self.clicks)
+        executor.backend.click(button=self.btn, clicks=self.clicks,
+                               interval=self.interval)
 
-# Parser with mode
+# ─────────────────────────── Parser ───────────────────────────
 class CommandParser:
-    _SPECIAL_KEY_REGEX = re.compile(r"<([^>]+)>")
-    _WAIT_REGEX = re.compile(r"^WAIT_(\d+(?:\.\d+)?)$")
-
-    def __init__(self, strict: bool = False):
-        self.strict = strict
+    _RE_WAIT = re.compile(r"^WAIT_(\d+(?:\.\d+)?)$")
+    _RE_SPEC = re.compile(r"<([^>]+)>")
+    def __init__(self, strict=False): self.strict = strict
 
     def parse(self, text: str) -> list[Token]:
-        tokens, buf, i = [], [], 0
+        out, buf, i = [], [], 0
         def flush():
-            if buf: tokens.append(TextToken("".join(buf))); buf.clear()
+            if buf: out.append(TextToken("".join(buf))); buf.clear()
         while i < len(text):
-            if text[i] == '\\' and i+1 < len(text):
-                if text[i+1] == '{':
-                    buf.append('{'); i+=2; continue
-                elif text[i+1] == '}':
-                    buf.append('}'); i+=2; continue
-                else:
-                    buf.append(text[i+1]); i+=2; continue
-            if text[i] == '{':
-                flush(); end = text.find('}', i)
+            if text[i] == "\\" and i+1 < len(text) and text[i+1] in "{}\\":
+                buf.append(text[i+1]); i += 2; continue
+            if text[i] == "{":
+                flush(); end = text.find("}", i)
                 if end < 0:
-                    msg = text[i:]
-                    logger.warning(f"Unmatched '{{': '{msg}'")
-                    if not self.strict: buf.append(msg)
-                    break
-                content = text[i+1:end]
-                stripped = content.strip()
+                    if not self.strict: buf.append(text[i:]); break
+                    raise ValueError("unmatched '{'")
+                inner = text[i+1:end].strip()
                 handled = False
-                # Allow whitespace around + and key names
-                key_combo_pattern = r"\s*\+\s*"
-                if m:=self._WAIT_REGEX.fullmatch(stripped):
-                    tokens.append(WaitToken(float(m.group(1))))
+                if inner == "":                              # literal {}
+                    out.append(TextToken("{}")); handled=True
+                elif m:=self._RE_WAIT.fullmatch(inner):
+                    out.append(WaitToken(float(m.group(1)))); handled=True
+                elif m:=re.fullmatch(r"MOUSE_MOVE_(\d+)_(\d+)", inner):
+                    out.append(MouseMoveToken(int(m.group(1)), int(m.group(2))))
                     handled=True
-                elif m:=re.fullmatch(r"MOUSE_MOVE_(\d+)_(\d+)", stripped):
-                    tokens.append(MouseMoveToken(int(m.group(1)), int(m.group(2))))
+                elif m:=re.fullmatch(r"MOUSE_CLICK_(\w+)", inner):
+                    out.append(MouseClickToken(btn=m.group(1).lower()))
                     handled=True
-                elif m:=re.fullmatch(r"MOUSE_CLICK_(\w+)", stripped):
-                    tokens.append(MouseClickToken(button=m.group(1).lower()))
-                    handled=True
-                else:
-                    # Split on +, allowing whitespace
-                    parts = [p.strip() for p in re.split(key_combo_pattern, stripped)]
+                else:                                       # key combo
+                    parts=[p.strip() for p in re.split(r"\s*\+\s*", inner)]
                     keys, valid = [], True
                     for p in parts:
-                        if not p:
-                            valid=False
-                            break
-                        if (m:=self._SPECIAL_KEY_REGEX.fullmatch(p)):
-                            keys.append(m.group(1).lower())
-                        elif len(p)==1:
-                            keys.append(p)
-                        else:
-                            valid=False
-                            break
+                        if not p: valid=False; break
+                        if m:=self._RE_SPEC.fullmatch(p): keys.append(m.group(1).lower())
+                        elif len(p)==1: keys.append(p)
+                        else: valid=False; break
                     if valid and keys:
-                        tokens.append(KeyToken(keys))
-                        handled=True
+                        out.append(KeyToken(keys)); handled=True
                 if not handled:
-                    logger.warning(f"Skipping invalid sequence: '{{{content}}}'")
-                    # Do not append invalid sequence to buffer (skip it)
-                i = end+1
-            else:
-                buf.append(text[i]); i+=1
+                    logger.warning("Skipping invalid sequence {%s}", inner)
+                i = end+1; continue
+            buf.append(text[i]); i+=1
         flush()
-        # merge TextTokens
+        # merge neighbour TextTokens
         merged=[]
-        for t in tokens:
-            if merged and isinstance(t, TextToken) and isinstance(merged[-1], TextToken): merged[-1].text+=t.text
+        for t in out:
+            if merged and isinstance(t, TextToken) and isinstance(merged[-1], TextToken):
+                merged[-1].text += t.text
             else: merged.append(t)
         return merged
 
-# Typist
+# ─────────────────────────── Typist ───────────────────────────
 class Typist:
-    def __init__(self, typing_speed: float=0.05, typing_variance: float=0.02, backend=None, strict: bool=False):
+    def __init__(self, typing_speed=.05, typing_variance=.02,
+                 backend=None, strict=False):
         self.typing_speed, self.typing_variance = typing_speed, typing_variance
-        # backend selection
         if backend is None:
-            if "DISPLAY" not in os.environ and os.name!='nt': raise RuntimeError("Missing DISPLAY; use Xvfb or custom backend.")
-            import pyautogui; self.backend = pyautogui
-        else: self.backend = backend
-        # clipboard strategy
-        clipboard = None
-        try:
-            clipboard = PyperclipClipboard(); logger.info("Using Pyperclip clipboard strategy")
-        except Exception:
+            if "DISPLAY" not in os.environ and os.name!="nt":
+                raise RuntimeError("No DISPLAY; use Xvfb or supply backend")
+            import pyautogui as pg; backend = pg
+        self.backend = backend
+        # clipboard: try pyperclip, platform, tk
+        self.clipboard = None
+        for strat in (PyperclipClipboard, PlatformClipboard, TkClipboard):
             try:
-                clipboard = PlatformClipboard(); logger.info("Using Platform clipboard strategy")
+                self.clipboard = strat()
+                logger.info("Using %s clipboard", strat.__name__); break
             except Exception as e:
-                logger.warning(f"No clipboard mechanism: {e}. Typing fallback only.")
-        self.clipboard = clipboard
-        # unicode typing support via pynput
+                logger.debug("%s unavailable: %s", strat.__name__, e)
         try:
-            from pynput.keyboard import Controller as PController
-            self.pynput = PController()
-            logger.info("Using pynput for direct unicode typing")
+            from pynput.keyboard import Controller as PC
+            self.pynput = PC(); logger.info("Using pynput")
         except Exception:
             self.pynput = None
         self.strict = strict
 
-    def execute(self, tokens: list[Token]):
-        for token in tokens:
-            try: token.execute(self)
-            except Exception as e: logger.error(f"Token error: {e}")
+    def execute(self, toks: list[Token]):
+        for t in toks:
+            try: t.execute(self)
+            except Exception as e: logger.error("Token exec error: %s", e)
 
-# Backward-compatible interface
+# ─────────────────────────── Facade ───────────────────────────
 class TextTyper:
-    def __init__(self, text: str, typing_speed: float=0.05, typing_variance: float=0.05, backend=None, strict: bool=False):
-        self.text, self.typing_speed, self.typing_variance, self.backend, self.strict = text, typing_speed, typing_variance, backend, strict
+    def __init__(self, text: str, typing_speed=.05, typing_variance=.05,
+                 backend=None, strict=False):
+        self.text=text; self.typing_speed=typing_speed
+        self.typing_variance=typing_variance; self.backend=backend
+        self.strict=strict
         self._parser = CommandParser(strict)
-        self._typist = Typist(typing_speed, typing_variance, backend, strict)
+        self._typist = Typist(typing_speed, typing_variance,
+                              backend, strict)
+        if self.backend is None: self.backend = self._typist.backend
 
     def simulate_typing(self):
-        tokens = self._parser.parse(self.text)
-        logger.info(f"Parsed {len(tokens)} tokens: {[type(t).__name__ for t in tokens]}")
-        self._typist.execute(tokens)
+        toks = self._parser.parse(self.text)
+        logger.info("Parsed %d tokens", len(toks))
+        self._typist.execute(toks)
 
-# Usage:
-# TextTyper("Symbols #<>?", strict=False).simulate_typing()
+# ─────────────────────────── Self-test ───────────────────────────
+if __name__ == "__main__":
+    logging.getLogger().setLevel(logging.DEBUG)
+    TextTyper(r"<>:{}|@#  {WAIT_0.2}  Hello!".strip()).simulate_typing()
