@@ -133,8 +133,13 @@ class CommandParser:
         def flush():
             if buf: tokens.append(TextToken("".join(buf))); buf.clear()
         while i < len(text):
-            if text[i] == '\\' and i+1 < len(text) and text[i+1] in '{}\\':
-                buf.append(text[i+1]); i+=2; continue
+            if text[i] == '\\' and i+1 < len(text):
+                if text[i+1] == '{':
+                    buf.append('{'); i+=2; continue
+                elif text[i+1] == '}':
+                    buf.append('}'); i+=2; continue
+                else:
+                    buf.append(text[i+1]); i+=2; continue
             if text[i] == '{':
                 flush(); end = text.find('}', i)
                 if end < 0:
@@ -145,20 +150,38 @@ class CommandParser:
                 content = text[i+1:end]
                 stripped = content.strip()
                 handled = False
-                if m:=self._WAIT_REGEX.fullmatch(stripped): tokens.append(WaitToken(float(m.group(1)))); handled=True
-                elif m:=re.fullmatch(r"MOUSE_MOVE_(\d+)_(\d+)", stripped): tokens.append(MouseMoveToken(int(m.group(1)), int(m.group(2)))); handled=True
-                elif m:=re.fullmatch(r"MOUSE_CLICK_(\w+)", stripped): tokens.append(MouseClickToken(button=m.group(1).lower())); handled=True
+                # Allow whitespace around + and key names
+                key_combo_pattern = r"\s*\+\s*"
+                if m:=self._WAIT_REGEX.fullmatch(stripped):
+                    tokens.append(WaitToken(float(m.group(1))))
+                    handled=True
+                elif m:=re.fullmatch(r"MOUSE_MOVE_(\d+)_(\d+)", stripped):
+                    tokens.append(MouseMoveToken(int(m.group(1)), int(m.group(2))))
+                    handled=True
+                elif m:=re.fullmatch(r"MOUSE_CLICK_(\w+)", stripped):
+                    tokens.append(MouseClickToken(button=m.group(1).lower()))
+                    handled=True
                 else:
-                    parts, keys, valid = stripped.split('+'), [], True
+                    # Split on +, allowing whitespace
+                    parts = [p.strip() for p in re.split(key_combo_pattern, stripped)]
+                    keys, valid = [], True
                     for p in parts:
-                        if not p: valid=False; break
-                        if (m:=self._SPECIAL_KEY_REGEX.fullmatch(p)): keys.append(m.group(1).lower())
-                        elif len(p)==1: keys.append(p)
-                        else: valid=False; break
-                    if valid and keys: tokens.append(KeyToken(keys)); handled=True
+                        if not p:
+                            valid=False
+                            break
+                        if (m:=self._SPECIAL_KEY_REGEX.fullmatch(p)):
+                            keys.append(m.group(1).lower())
+                        elif len(p)==1:
+                            keys.append(p)
+                        else:
+                            valid=False
+                            break
+                    if valid and keys:
+                        tokens.append(KeyToken(keys))
+                        handled=True
                 if not handled:
-                    if self.strict: logger.warning(f"Skipping invalid '{{{content}}}'")
-                    else: buf.append('{' + content + '}')
+                    logger.warning(f"Skipping invalid sequence: '{{{content}}}'")
+                    # Do not append invalid sequence to buffer (skip it)
                 i = end+1
             else:
                 buf.append(text[i]); i+=1

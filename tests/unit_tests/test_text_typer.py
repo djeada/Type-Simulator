@@ -172,7 +172,7 @@ def test_text_typer_escape_and_wait(caplog):
     start = time.time()
     typer.simulate_typing()
     duration = time.time() - start
-    # First action should write literal '{'
-    assert backend.actions[0] == ("write", "{", 0)
+    # First action should write literal '\'
+    assert backend.actions[0] == ("write", "\\", 0)
     # Then a wait occurred for at least 0.01s
     assert duration >= 0.01
