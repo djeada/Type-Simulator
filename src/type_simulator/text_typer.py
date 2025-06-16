@@ -85,8 +85,8 @@ class TextToken(Token):
     PROBLEMATIC = set(":<>?|@#{}")
 
     PASTE_COMBOS = (
-        ("ctrl", "v"),          # Windows / most Linux apps
         ("shift", "insert"),    # Linux terminals and X11 fallback
+        ("ctrl", "v"),          # Windows / most Linux apps
         ("command", "v"),       # macOS
     )
     PASTE_SETTLE = 0.12        # seconds to wait after each paste hot-key
