@@ -83,30 +83,53 @@ class Token(ABC):
 
 class TextToken(Token):
     PROBLEMATIC = set(":<>?|@#{}")
-    def __init__(self, text: str): self.text = text
 
-    def _paste_keys(self):
-        return ("command", "v") if sys.platform == "darwin" else ("ctrl", "v")
+    PASTE_COMBOS = (
+        ("ctrl", "v"),          # Windows / most Linux apps
+        ("shift", "insert"),    # Linux terminals and X11 fallback
+        ("command", "v"),       # macOS
+    )
+    PASTE_SETTLE = 0.12        # seconds to wait after each paste hot-key
+
+    def __init__(self, text: str):
+        self.text = text
 
     def execute(self, executor: "Typist"):
         for ch in self.text:
-            interval = max(0, executor.typing_speed +
-                              executor.typing_variance * (2*random.random()-1))
+            interval = max(
+                0,
+                executor.typing_speed
+                + executor.typing_variance * (2 * random.random() - 1),
+            )
 
-            # ───── clipboard path ─────
+            # ───── clipboard route ─────
             if ch in self.PROBLEMATIC and executor.clipboard:
-                try:
-                    prev = executor.clipboard.paste()
-                    executor.clipboard.copy(ch)
-                    logger.debug("Typing %r via clipboard", ch)
-                    executor.backend.hotkey(*self._paste_keys())
-                    time.sleep(0.05)
-                    executor.clipboard.copy(prev)
-                    continue
-                except Exception as e:
-                    logger.debug("Clipboard path failed for %r: %s", ch, e)
+                prev = executor.clipboard.paste()
+                executor.clipboard.copy(ch)
 
-            # ───── pynput path ─────
+                pasted = False
+                for combo in self.PASTE_COMBOS:
+                    try:
+                        logger.debug("Typing %r via clipboard (%s)", ch, "+".join(combo))
+                        executor.backend.hotkey(*combo)
+                        time.sleep(self.PASTE_SETTLE)
+                        pasted = True
+                        break
+                    except Exception as e:
+                        logger.debug("Hot-key %s failed: %s", "+".join(combo), e)
+
+                # restore user clipboard
+                try:
+                    executor.clipboard.copy(prev)
+                except Exception:
+                    pass
+
+                if pasted:
+                    continue   # success – go on to next character
+                else:
+                    logger.debug("All paste combos failed for %r", ch)
+
+            # ───── pynput route ─────
             if ch in self.PROBLEMATIC and executor.pynput:
                 try:
                     logger.debug("Typing %r via pynput", ch)
@@ -114,9 +137,9 @@ class TextToken(Token):
                     time.sleep(0.02)
                     continue
                 except Exception as e:
-                    logger.debug("pynput path failed for %r: %s", ch, e)
+                    logger.debug("pynput failed for %r: %s", ch, e)
 
-            # ───── default pyautogui write ─────
+            # ───── final fallback – write() ─────
             logger.debug("Typing %r via write()", ch)
             executor.backend.write(ch, interval=interval)
 
