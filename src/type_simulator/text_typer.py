@@ -87,8 +87,8 @@ class TextToken(Token):
     # ordered by preference
     PASTE_CANDIDATES = (
         ("primary",   ("shift", "insert")),        # X11 & Linux terminals
-        ("clipboard", ("ctrl", "v")),              # Win / X11 / many apps
-        ("clipboard", ("command", "v")),           # macOS
+       # ("clipboard", ("ctrl", "v")),              # Win / X11 / many apps
+       # ("clipboard", ("command", "v")),           # macOS
     )
     PASTE_SETTLE = 0.12       # seconds to wait after a hot-key
 
