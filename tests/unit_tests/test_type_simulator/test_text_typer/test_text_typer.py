@@ -1,11 +1,7 @@
 import pytest
-import sys
 import os
 import time
 import logging
-
-# Adjust path to import our module
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from type_simulator.text_typer.token import TextToken, WaitToken, KeyToken
 from type_simulator.text_typer.parser import CommandParser
