@@ -4,6 +4,7 @@ import subprocess
 from type_simulator.type_simulator import Mode
 from type_simulator.text_typer import CommandParser
 
+
 def validate_inputs(mode, file_path, editor_cmd, text):
     """
     Validate CLI inputs and text for Type-Simulator.
@@ -24,7 +25,7 @@ def validate_inputs(mode, file_path, editor_cmd, text):
     # Editor command check
     if mode == Mode.GUI and editor_cmd:
         cmd = editor_cmd.split()[0]
-        result = subprocess.run(['which', cmd], capture_output=True)
+        result = subprocess.run(["which", cmd], capture_output=True)
         if result.returncode != 0:
             errors.append(f"Editor command not found: {cmd}")
 
@@ -35,12 +36,14 @@ def validate_inputs(mode, file_path, editor_cmd, text):
         # Capture warnings from CommandParser
         parser = CommandParser()
         parser_warnings = []
+
         class WarnCatcher(logging.Handler):
             def emit(self, record):
                 if record.levelno == logging.WARNING:
                     parser_warnings.append(self.format(record))
+
         handler = WarnCatcher()
-        logger = logging.getLogger('type_simulator.text_typer')
+        logger = logging.getLogger("type_simulator.text_typer")
         logger.addHandler(handler)
         logger.setLevel(logging.WARNING)
         try:
