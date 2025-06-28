@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 import subprocess
 from type_simulator.type_simulator import Mode
-from type_simulator.text_typer import CommandParser
+from type_simulator.text_typer.parser import CommandParser
 
 
 def validate_inputs(mode, file_path, editor_cmd, text):

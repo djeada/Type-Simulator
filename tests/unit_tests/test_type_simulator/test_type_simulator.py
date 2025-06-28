@@ -2,8 +2,6 @@ import sys
 import os
 from unittest import mock
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
-
 with mock.patch.dict("sys.modules", {"pyautogui": mock.MagicMock()}):
     from type_simulator.type_simulator import TypeSimulator, Mode
     from type_simulator.file_manager import FileManager
