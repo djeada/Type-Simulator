@@ -12,12 +12,26 @@ from type_simulator.text_typer.__main__ import Typist, TextTyper
 class DummyBackend:
     def __init__(self):
         self.actions = []
+        self.typing_speed = 0
+        self.typing_variance = 0
+        self.backend = self
+        self.clipboard = None
+        self.pynput = None
 
     def write(self, ch, interval=None):
         self.actions.append(("write", ch, interval))
 
     def hotkey(self, *keys):
         self.actions.append(("hotkey", keys))
+
+    def moveTo(self, x, y, duration=0):
+        self.actions.append(("moveTo", x, y, duration))
+
+    def click(self, button="left", clicks=1, interval=0):
+        self.actions.append(("click", button, clicks, interval))
+
+    def press(self, key):
+        self.actions.append(("press", key))
 
 
 # Typist tests
@@ -49,18 +63,17 @@ def test_text_typer_integration():
         "Hi{<enter>}!", typing_speed=0, typing_variance=0, backend=backend
     )
     typer.simulate_typing()
-    # The actual output may use paste for '!' due to PROBLEMATIC_CHARS, so check the sequence more flexibly
     expected = [
         ("write", "H", 0),
         ("write", "i", 0),
         ("hotkey", ("enter",)),
     ]
-    # The last action can be either a write or a hotkey paste for '!'
     assert backend.actions[:3] == expected
-    # Accept either a write or a hotkey for the last action
     last_action = backend.actions[3]
-    assert (last_action[0] == "write" and last_action[1] == "!") or (
-        last_action[0] == "hotkey" and "insert" in last_action[1]
+    # Accept write, hotkey with 'insert', or hotkey with ctrl+shift+u (unicode hex fallback)
+    assert (
+        (last_action[0] == "write" and last_action[1] == "!") or
+        (last_action[0] == "hotkey" and ("insert" in last_action[1] or ("ctrl" in last_action[1] and "shift" in last_action[1] and "u" in last_action[1])))
     )
 
 
@@ -73,10 +86,9 @@ def test_text_typer_escape_and_wait(caplog):
     start = time.time()
     typer.simulate_typing()
     duration = time.time() - start
-    # The first action can be a write or a hotkey paste for '\'
     first_action = backend.actions[0]
-    assert (first_action[0] == "write" and first_action[1] == "\\") or (
-        first_action[0] == "hotkey" and "insert" in first_action[1]
+    assert (
+        (first_action[0] == "write" and first_action[1] == "\\") or
+        (first_action[0] == "hotkey" and ("insert" in first_action[1] or ("ctrl" in first_action[1] and "shift" in first_action[1] and "u" in first_action[1])))
     )
-    # Then a wait occurred for at least 0.01s
     assert duration >= 0.01

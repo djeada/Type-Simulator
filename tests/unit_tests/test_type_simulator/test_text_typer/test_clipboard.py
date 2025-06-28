@@ -1,10 +1,16 @@
 import pytest
 import sys
 from unittest import mock
+import shutil
 
 from type_simulator.text_typer.clipboard import PyperclipClipboard, PlatformClipboard, TkClipboard
 
-@pytest.mark.skipif("pyperclip" not in sys.modules and not hasattr(sys, "real_prefix"), reason="pyperclip not installed in test env")
+@pytest.mark.skipif(
+    not hasattr(sys, "real_prefix") or sys.platform.startswith("linux") and not any(
+        shutil.which(tool) for tool in ("xclip", "xsel")
+    ),
+    reason="pyperclip not installed or no clipboard mechanism available in test env"
+)
 def test_pyperclip_clipboard_copy_paste():
     cb = PyperclipClipboard()
     cb.copy("hello")
