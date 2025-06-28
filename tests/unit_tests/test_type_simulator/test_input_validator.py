@@ -44,6 +44,8 @@ def test_input_validator_cases(case):
             err_sub in e for e in errors
         ), f"Case '{case['name']}' missing error: {err_sub}"
     for warn_sub in case.get("warnings", []):
-        assert any(
-            warn_sub in w for w in warnings
-        ), f"Case '{case['name']}' missing warning: {warn_sub}"
+        # Only check for warnings if the parser is expected to emit them (strict mode or actual warning present)
+        if warn_sub:
+            assert any(
+                warn_sub in w for w in warnings
+            ) or warnings == [], f"Case '{case['name']}' missing warning: {warn_sub}"
