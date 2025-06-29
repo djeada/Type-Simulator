@@ -71,9 +71,16 @@ def test_text_typer_integration():
     assert backend.actions[:3] == expected
     last_action = backend.actions[3]
     # Accept write, hotkey with 'insert', or hotkey with ctrl+shift+u (unicode hex fallback)
-    assert (
-        (last_action[0] == "write" and last_action[1] == "!") or
-        (last_action[0] == "hotkey" and ("insert" in last_action[1] or ("ctrl" in last_action[1] and "shift" in last_action[1] and "u" in last_action[1])))
+    assert (last_action[0] == "write" and last_action[1] == "!") or (
+        last_action[0] == "hotkey"
+        and (
+            "insert" in last_action[1]
+            or (
+                "ctrl" in last_action[1]
+                and "shift" in last_action[1]
+                and "u" in last_action[1]
+            )
+        )
     )
 
 
@@ -87,8 +94,15 @@ def test_text_typer_escape_and_wait(caplog):
     typer.simulate_typing()
     duration = time.time() - start
     first_action = backend.actions[0]
-    assert (
-        (first_action[0] == "write" and first_action[1] == "\\") or
-        (first_action[0] == "hotkey" and ("insert" in first_action[1] or ("ctrl" in first_action[1] and "shift" in first_action[1] and "u" in first_action[1])))
+    assert (first_action[0] == "write" and first_action[1] == "\\") or (
+        first_action[0] == "hotkey"
+        and (
+            "insert" in first_action[1]
+            or (
+                "ctrl" in first_action[1]
+                and "shift" in first_action[1]
+                and "u" in first_action[1]
+            )
+        )
     )
     assert duration >= 0.01
