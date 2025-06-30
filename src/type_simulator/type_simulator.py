@@ -41,7 +41,7 @@ class TypeSimulator:
         *args,
         mode: Mode = Mode.GUI,
         editor_cmd: Optional[str] = None,
-        typing_speed: float = 0.05,
+        typing_speed: float = 0.15,
         typing_variance: float = 0.05,
         wait: float = 0.0,
         pre_launch_cmd: Optional[str] = None,

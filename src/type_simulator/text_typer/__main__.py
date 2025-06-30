@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────── Typist ───────────────────────────
 class Typist:
     def __init__(
-        self, typing_speed=0.05, typing_variance=0.02, backend=None, strict=False
+        self, typing_speed=0.15, typing_variance=0.05, backend=None, strict=False
     ):
         self.typing_speed, self.typing_variance = typing_speed, typing_variance
         if backend is None:
@@ -56,7 +56,7 @@ class TextTyper:
     def __init__(
         self,
         text: str,
-        typing_speed=0.05,
+        typing_speed=0.15,
         typing_variance=0.05,
         backend=None,
         strict=False,

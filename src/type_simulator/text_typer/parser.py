@@ -59,7 +59,7 @@ class CommandParser:
                         break
                     raise ValueError("Unmatched '{' in input")
 
-                spec = text[idx + 1 : end_idx].strip()
+                spec = text[idx + 1 : end_idx]
                 token = self._parse_spec(spec)
 
                 if token:
@@ -87,20 +87,20 @@ class CommandParser:
         # Empty braces means literal {}
         if spec == "":
             return TextToken("{}")
-        # Wait
-        m = self._RE_WAIT.fullmatch(spec)
+        # Wait - strip whitespace for patterns that expect clean input
+        m = self._RE_WAIT.fullmatch(spec.strip())
         if m:
             return WaitToken(float(m.group("secs")))
         # Mouse move
-        m = self._RE_MOUSE_MOVE.fullmatch(spec)
+        m = self._RE_MOUSE_MOVE.fullmatch(spec.strip())
         if m:
             return MouseMoveToken(int(m.group("x")), int(m.group("y")))
         # Mouse click
-        m = self._RE_MOUSE_CLICK.fullmatch(spec)
+        m = self._RE_MOUSE_CLICK.fullmatch(spec.strip())
         if m:
             return MouseClickToken(btn=m.group("btn").lower())
-        # Key combination
-        parts = [p.strip() for p in re.split(r"\s*\+\s*", spec)]
+        # Key combination - strip for patterns
+        parts = [p.strip() for p in re.split(r"\s*\+\s*", spec.strip())]
         keys: List[str] = []
         for part in parts:
             if not part:
