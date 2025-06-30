@@ -20,7 +20,6 @@ PASTE_STRATEGIES: List[Tuple[str, Tuple[str, ...]]] = [
     # ("clipboard", ("ctrl", "v")),   # standard clipboard
     # ("clipboard", ("command", "v")),# macOS clipboard
 ]
-PASTE_SETTLE_DELAY = 0.12  # seconds after paste hotkey
 
 
 def _copy_to_primary_x11(text: str) -> bool:
@@ -43,16 +42,16 @@ def _copy_to_primary_x11(text: str) -> bool:
     return False
 
 
-def _type_unicode_hex(ch: str, backend) -> None:
+def _type_unicode_hex(ch: str, backend, typing_speed: float) -> None:
     """
     Input Unicode character via Ctrl+Shift+U hex input (Linux/Gtk/Qt).
     """
     hex_code = f"{ord(ch):x}"
     backend.hotkey("ctrl", "shift", "u")
-    time.sleep(0.05)
+    time.sleep(typing_speed)
     backend.write(hex_code)
     backend.press("space")
-    time.sleep(0.05)
+    time.sleep(typing_speed)
 
 
 class Token(ABC):
@@ -73,7 +72,12 @@ class TextToken(Token):
                 executor.typing_speed
                 + executor.typing_variance * (2 * random.random() - 1),
             )
-            if ch in PROBLEMATIC_CHARS:
+            # Handle newline as Enter keypress
+            if ch == '\n':
+                logger.debug("Typing newline via Enter key")
+                executor.backend.press('enter')
+                time.sleep(interval)
+            elif ch in PROBLEMATIC_CHARS:
                 if self._paste_character(ch, executor):
                     continue
                 self._fallback_type(ch, executor, interval)
@@ -89,14 +93,14 @@ class TextToken(Token):
                 if target == "primary" and _copy_to_primary_x11(ch):
                     logger.debug("Pasting '%s' via %s", ch, target)
                     executor.backend.hotkey(*keys)
-                    time.sleep(PASTE_SETTLE_DELAY)
+                    time.sleep(executor.typing_speed)
                     return True
                 elif target == "clipboard" and executor.clipboard:
                     prev = executor.clipboard.paste()
                     executor.clipboard.copy(ch)
                     logger.debug("Pasting '%s' via clipboard + %s", ch, "+".join(keys))
                     executor.backend.hotkey(*keys)
-                    time.sleep(PASTE_SETTLE_DELAY)
+                    time.sleep(executor.typing_speed)
                     executor.clipboard.copy(prev)
                     return True
             except Exception as e:
@@ -108,11 +112,11 @@ class TextToken(Token):
         # Fallback methods: unicode hex, pynput, or direct write
         if sys.platform.startswith("linux"):
             logger.debug("Typing '%s' via unicode hex input", ch)
-            _type_unicode_hex(ch, executor.backend)
+            _type_unicode_hex(ch, executor.backend, executor.typing_speed)
         elif getattr(executor, "pynput", None):
             logger.debug("Typing '%s' via pynput", ch)
             executor.pynput.type(ch)
-            time.sleep(0.02)
+            time.sleep(executor.typing_speed)
         else:
             logger.debug("Typing '%s' via write", ch)
             executor.backend.write(ch, interval=interval)

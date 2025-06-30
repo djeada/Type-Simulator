@@ -42,6 +42,41 @@ def test_text_token_execute():
     assert executor.actions[1][1] == "i"
 
 
+def test_text_token_newline_handling():
+    """Test that newlines are converted to Enter key presses"""
+    executor = DummyExecutor()
+    token = TextToken("Hi\nWorld")
+    token.execute(executor)
+
+    # Should have: write 'H', write 'i', press 'enter', write 'W', write 'o', write 'r', write 'l', write 'd'
+    assert len(executor.actions) == 8
+    assert executor.actions[0] == ("write", "H", 0)
+    assert executor.actions[1] == ("write", "i", 0)
+    assert executor.actions[2] == ("press", "enter")
+    assert executor.actions[3] == ("write", "W", 0)
+    assert executor.actions[4] == ("write", "o", 0)
+    assert executor.actions[5] == ("write", "r", 0)
+    assert executor.actions[6] == ("write", "l", 0)
+    assert executor.actions[7] == ("write", "d", 0)
+
+
+def test_text_token_curly_braces_with_newline():
+    """Test that curly braces followed by newline work correctly"""
+    executor = DummyExecutor()
+    token = TextToken("{\n}")
+    token.execute(executor)
+
+    # Should handle { as problematic char (will fail paste, fallback to write),
+    # then press enter for newline, then handle } as problematic char
+    expected_actions = []
+    for action in executor.actions:
+        if action[0] == "press" and action[1] == "enter":
+            expected_actions.append(action)
+
+    # At least one press enter should be in the actions
+    assert ("press", "enter") in executor.actions
+
+
 def test_wait_token_execute():
     executor = DummyExecutor()
     token = WaitToken(0.01)
