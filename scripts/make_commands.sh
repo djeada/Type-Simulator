@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 
 outfile="commands.txt"
+script_name="$(basename "$0")"
+
 > "$outfile"  # clear/create output
 
 for f in *; do
-  if [ -f "$f" ]; then
+  # Only regular files, and skip the output + this script file
+  if [ -f "$f" ] && [ "$f" != "$outfile" ] && [ "$f" != "$script_name" ]; then
     {
       echo "vim $f{<enter>}"
       echo "i"
 
-      # Filter:
-      # 1. Put { and } on their own line
-      # 2. Strip leading whitespace
-      # 3. Remove blank line(s) right after {
+      # 1) Put { and } on their own lines
+      # 2) Strip leading whitespace
+      # 3) Remove blank line(s) immediately after {
       sed -E '
         s/[[:space:]]*\{[[:space:]]*/\
 {\
@@ -22,8 +24,7 @@ for f in *; do
 /g
         s/^[[:space:]]+//g
       ' -- "$f" | awk '
-        # if previous line was "{", skip empty lines
-        prev == "{" && NF == 0 { next }
+        prev == "{" && NF == 0 { next }  # skip empty line right after {
         { print; prev=$0 }
       '
 
