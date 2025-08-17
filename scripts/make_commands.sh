@@ -9,7 +9,10 @@ for f in *; do
       echo "vim $f{<enter>}"
       echo "i"
 
-      # Filter: brace-per-line + strip leading whitespace
+      # Filter:
+      # 1. Put { and } on their own line
+      # 2. Strip leading whitespace
+      # 3. Remove blank line(s) right after {
       sed -E '
         s/[[:space:]]*\{[[:space:]]*/\
 {\
@@ -18,7 +21,11 @@ for f in *; do
 }\
 /g
         s/^[[:space:]]+//g
-      ' -- "$f"
+      ' -- "$f" | awk '
+        # if previous line was "{", skip empty lines
+        prev == "{" && NF == 0 { next }
+        { print; prev=$0 }
+      '
 
       echo "{<esc>}"
       echo ":wq!{<enter>}"
@@ -27,4 +34,3 @@ for f in *; do
     } >> "$outfile"
   fi
 done
-
