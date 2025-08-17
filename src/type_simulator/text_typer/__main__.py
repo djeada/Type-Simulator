@@ -1,13 +1,13 @@
 import os
 import logging
 
-from src.type_simulator.text_typer.clipboard import (
+from type_simulator.text_typer.clipboard import (
     PyperclipClipboard,
     PlatformClipboard,
     TkClipboard,
 )
-from src.type_simulator.text_typer.parser import CommandParser
-from src.type_simulator.text_typer.token import Token
+from type_simulator.text_typer.parser import CommandParser
+from type_simulator.text_typer.token import Token
 
 logger = logging.getLogger(__name__)
 

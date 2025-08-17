@@ -106,3 +106,24 @@ def test_preserve_colon():
     tokens = parser.parse(":start and end:")
     assert len(tokens) == 1
     assert tokens[0].text == ":start and end:"
+
+
+def test_preserve_empty_lines_after_brace_and_logging(caplog):
+    """Ensure that empty lines after '{' are preserved and visible in logs when invalid spec occurs."""
+    caplog.set_level(logging.DEBUG)
+    parser = CommandParser(strict=False)
+    text = "{\n\nint value = 1;\n}"
+    tokens = parser.parse(text)
+    assert len(tokens) == 1
+    assert isinstance(tokens[0], TextToken)
+    assert tokens[0].text.startswith("{\n\nint value")
+
+    # Now with strict=True and an invalid spec that includes newlines to check escaped logging
+    caplog.clear()
+    parser_strict = CommandParser(strict=True)
+    bad = "{INVALID\n\nSPEC}"
+    tokens2 = parser_strict.parse(bad)
+    # In strict mode, invalid is skipped; result is empty text token list
+    assert all(t.__class__.__name__ != 'TextToken' or t.text != bad for t in tokens2)
+    # Ensure the log contains the escaped \n sequences
+    assert "Invalid sequence '{INVALID\\n\\nSPEC}'" in caplog.text
