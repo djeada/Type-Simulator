@@ -2,7 +2,7 @@ import re
 import logging
 from typing import List, Optional
 
-from src.type_simulator.text_typer.token import (
+from type_simulator.text_typer.token import (
     Token,
     TextToken,
     WaitToken,
@@ -65,7 +65,15 @@ class CommandParser:
                 if token:
                     tokens.append(token)
                 else:
-                    msg = f"Invalid sequence '{{{spec}}}'"
+                    # Escape control characters for clearer logging visibility
+                    def _escape(s: str) -> str:
+                        s = s.replace("\\", r"\\")
+                        s = s.replace("\n", r"\n").replace("\r", r"\r")
+                        return s
+                    preview = _escape(spec)
+                    if len(preview) > 200:
+                        preview = preview[:200] + "…"
+                    msg = f"Invalid sequence '{{{preview}}}'"
                     if self.strict:
                         logger.warning(msg)
                         # skip invalid spec in strict mode

@@ -12,7 +12,7 @@ import pyautogui
 from type_simulator.editor_manager import EditorManager
 from type_simulator.file_manager import FileManager
 
-from src.type_simulator.text_typer.__main__ import TextTyper
+from type_simulator.text_typer.__main__ import TextTyper
 
 
 class Mode(Enum):
