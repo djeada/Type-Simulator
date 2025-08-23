@@ -41,24 +41,26 @@ for f in *; do
       # 2) Strip leading whitespace
       # 3) Ensure EXACTLY N blank lines after each "{"
 sed -E '
-  # --- remove comment-only lines (after left trim) ---
+  # remove comment-only lines (after left trim)
   /^[[:space:]]*\/\//d
 
-  # --- protect "} ;" so we never split it ---
-  s/\}[[:space:]]*;/__RBRACE_SEMI__/g
-
-  # --- put { and } on their own lines (except protected "} ;") ---
+  # put { on its own line
   s/[[:space:]]*\{[[:space:]]*/\
 {\
 /g
-  s/[[:space:]]*\}[[:space:]]*/\
-}\
-/g
 
-  # --- restore "};" (squashes any spaces between } and ;) ---
-  s/__RBRACE_SEMI__/};/g
+  # ensure } starts its own line
+  s/[[:space:]]*\}/\
+}/g
 
-  # --- strip leading whitespace ---
+  # if } is followed by ;, keep them together and squash spaces
+  s/}[[:space:]]*;/};/g
+
+  # if anything (not ;) follows }, move it to the next line
+  s/}[[:space:]]*([^;[:space:]\n].*)/}\
+\1/g
+
+  # strip leading whitespace
   s/^[[:space:]]+//g
 ' -- "$f" | awk -v N="$n" '
   {
