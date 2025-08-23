@@ -40,37 +40,40 @@ for f in *; do
       # 1) Put { and } on their own lines
       # 2) Strip leading whitespace
       # 3) Ensure EXACTLY N blank lines after each "{"
-      sed -E '
-        s/[[:space:]]*\{[[:space:]]*/\
+sed -E '
+  # --- remove comment-only lines (after left trim) ---
+  /^[[:space:]]*\/\//d
+
+  # --- protect "} ;" so we never split it ---
+  s/\}[[:space:]]*;/__RBRACE_SEMI__/g
+
+  # --- put { and } on their own lines (except protected "} ;") ---
+  s/[[:space:]]*\{[[:space:]]*/\
 {\
 /g
-        s/[[:space:]]*\}[[:space:]]*/\
+  s/[[:space:]]*\}[[:space:]]*/\
 }\
 /g
-        s/^[[:space:]]+//g
-      ' -- "$f" | awk -v N="$n" '
-        {
-          # If we are right after a "{" and still seeing blank lines, skip them
-          if (pending_after_brace) {
-            if (NF == 0) next
-            # First non-empty line after "{": insert exactly N blanks before it
-            for (i = 0; i < N; i++) print ""
-            pending_after_brace = 0
-          }
 
-          print
+  # --- restore "};" (squashes any spaces between } and ;) ---
+  s/__RBRACE_SEMI__/};/g
 
-          # If the current line is exactly "{", arm the insertion for next non-empty
-          if ($0 == "{") pending_after_brace = 1
-        }
-        END {
-          # File ended right after "{": still honor N blanks
-          if (pending_after_brace) {
-            for (i = 0; i < N; i++) print ""
-          }
-        }
-      '
-
+  # --- strip leading whitespace ---
+  s/^[[:space:]]+//g
+' -- "$f" | awk -v N="$n" '
+  {
+    if (pending_after_brace) {
+      if (NF == 0) next
+      for (i = 0; i < N; i++) print ""
+      pending_after_brace = 0
+    }
+    print
+    if ($0 == "{") pending_after_brace = 1
+  }
+  END {
+    if (pending_after_brace) for (i = 0; i < N; i++) print ""
+  }
+'
       echo "{<esc>}"
       echo ":wq!{<enter>}"
       echo
