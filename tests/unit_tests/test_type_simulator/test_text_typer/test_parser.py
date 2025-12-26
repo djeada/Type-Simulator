@@ -3,7 +3,7 @@ import os
 import time
 import logging
 
-from type_simulator.text_typer.token import TextToken, WaitToken, KeyToken
+from type_simulator.text_typer.token import TextToken, WaitToken, KeyToken, RepeatToken, RandomTextToken, SpeedToken, VariableToken
 from type_simulator.text_typer.parser import CommandParser
 from type_simulator.text_typer.__main__ import Typist, TextTyper
 
@@ -127,3 +127,100 @@ def test_preserve_empty_lines_after_brace_and_logging(caplog):
     assert all(t.__class__.__name__ != 'TextToken' or t.text != bad for t in tokens2)
     # Ensure the log contains the escaped \n sequences
     assert "Invalid sequence '{INVALID\\n\\nSPEC}'" in caplog.text
+
+
+# New feature tests
+
+
+def test_parse_repeat_token():
+    """Test parsing of REPEAT blocks."""
+    parser = CommandParser()
+    tokens = parser.parse("{REPEAT_3}Hello {/REPEAT}")
+    assert len(tokens) == 1
+    assert type(tokens[0]).__name__ == "RepeatToken"
+    assert tokens[0].count == 3
+    assert len(tokens[0].tokens) == 1
+    assert tokens[0].tokens[0].text == "Hello "
+
+
+def test_parse_nested_repeat():
+    """Test nested REPEAT blocks."""
+    parser = CommandParser()
+    tokens = parser.parse("{REPEAT_2}{REPEAT_3}X{/REPEAT}{/REPEAT}")
+    assert len(tokens) == 1
+    assert type(tokens[0]).__name__ == "RepeatToken"
+    assert tokens[0].count == 2
+    inner = tokens[0].tokens[0]
+    assert type(inner).__name__ == "RepeatToken"
+    assert inner.count == 3
+
+
+def test_parse_random_token():
+    """Test parsing of RANDOM token."""
+    parser = CommandParser()
+    tokens = parser.parse("{RANDOM_10}")
+    assert len(tokens) == 1
+    assert type(tokens[0]).__name__ == "RandomTextToken"
+    assert tokens[0].length == 10
+    assert tokens[0].charset == "alphanumeric"
+
+
+def test_parse_random_with_charset():
+    """Test parsing of RANDOM token with custom charset."""
+    parser = CommandParser()
+    tokens = parser.parse("{RANDOM_5_alpha}")
+    assert len(tokens) == 1
+    assert tokens[0].length == 5
+    assert tokens[0].charset == "alpha"
+
+
+def test_parse_speed_token():
+    """Test parsing of SPEED token."""
+    parser = CommandParser()
+    tokens = parser.parse("{SPEED_0.1}")
+    assert len(tokens) == 1
+    assert type(tokens[0]).__name__ == "SpeedToken"
+    assert tokens[0].speed == pytest.approx(0.1)
+    assert tokens[0].variance is None
+
+
+def test_parse_speed_with_variance():
+    """Test parsing of SPEED token with variance."""
+    parser = CommandParser()
+    tokens = parser.parse("{SPEED_0.05_0.02}")
+    assert len(tokens) == 1
+    assert tokens[0].speed == pytest.approx(0.05)
+    assert tokens[0].variance == pytest.approx(0.02)
+
+
+def test_parse_variable_set():
+    """Test parsing of SET variable."""
+    parser = CommandParser()
+    tokens = parser.parse("{SET_myvar=hello world}")
+    assert len(tokens) == 1
+    assert type(tokens[0]).__name__ == "VariableToken"
+    assert tokens[0].name == "myvar"
+    assert tokens[0].value == "hello world"
+    assert tokens[0].action == "set"
+
+
+def test_parse_variable_get():
+    """Test parsing of GET variable."""
+    parser = CommandParser()
+    tokens = parser.parse("{GET_myvar}")
+    assert len(tokens) == 1
+    assert type(tokens[0]).__name__ == "VariableToken"
+    assert tokens[0].name == "myvar"
+    assert tokens[0].action == "get"
+
+
+def test_parse_complex_macro():
+    """Test parsing a complex macro with multiple features."""
+    parser = CommandParser()
+    macro = "{SPEED_0.1}Hello{WAIT_1}{REPEAT_2} World{/REPEAT}"
+    tokens = parser.parse(macro)
+    assert len(tokens) == 4
+    assert type(tokens[0]).__name__ == "SpeedToken"
+    assert type(tokens[1]).__name__ == "TextToken"
+    assert type(tokens[2]).__name__ == "WaitToken"
+    assert type(tokens[3]).__name__ == "RepeatToken"

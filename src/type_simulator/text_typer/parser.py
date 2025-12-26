@@ -9,6 +9,10 @@ from type_simulator.text_typer.token import (
     MouseMoveToken,
     MouseClickToken,
     KeyToken,
+    RepeatToken,
+    RandomTextToken,
+    VariableToken,
+    SpeedToken,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,6 +31,16 @@ class CommandParser:
     _RE_MOUSE_MOVE = re.compile(r"MOUSE_MOVE_(?P<x>\d+)_(?P<y>\d+)$")
     _RE_MOUSE_CLICK = re.compile(r"MOUSE_CLICK_(?P<btn>\w+)$")
     _RE_SPEC = re.compile(r"<(?P<key>[^>]+)>$")
+    _RE_REPEAT_START = re.compile(r"REPEAT_(?P<count>\d+)$")
+    _RE_REPEAT_END = re.compile(r"/REPEAT$")
+    _RE_RANDOM = re.compile(
+        r"RANDOM_(?P<length>\d+)(?:_(?P<charset>alphanumeric|alpha|numeric|custom:[^\}]+))?$"
+    )
+    _RE_VAR_SET = re.compile(r"SET_(?P<name>\w+)=(?P<value>.*)$")
+    _RE_VAR_GET = re.compile(r"GET_(?P<name>\w+)$")
+    _RE_SPEED = re.compile(
+        r"SPEED_(?P<speed>\d+(?:\.\d+)?)(?:_(?P<variance>\d+(?:\.\d+)?))?$"
+    )
 
     def __init__(self, strict: bool = False):
         self.strict = strict
@@ -35,6 +49,7 @@ class CommandParser:
         tokens: List[Token] = []
         buffer: List[str] = []
         idx, length = 0, len(text)
+        repeat_stack: List[tuple] = []  # Stack of (count, start_tokens_idx)
 
         def flush_buffer() -> None:
             if buffer:
@@ -60,6 +75,24 @@ class CommandParser:
                     raise ValueError("Unmatched '{' in input")
 
                 spec = text[idx + 1 : end_idx]
+
+                # Check for REPEAT_N start
+                m = self._RE_REPEAT_START.fullmatch(spec.strip())
+                if m:
+                    repeat_stack.append((int(m.group("count")), len(tokens)))
+                    idx = end_idx + 1
+                    continue
+
+                # Check for /REPEAT end
+                if self._RE_REPEAT_END.fullmatch(spec.strip()):
+                    if repeat_stack:
+                        count, start_idx = repeat_stack.pop()
+                        repeat_tokens = tokens[start_idx:]
+                        tokens = tokens[:start_idx]
+                        tokens.append(RepeatToken(count, repeat_tokens))
+                    idx = end_idx + 1
+                    continue
+
                 token = self._parse_spec(spec)
 
                 if token:
@@ -107,6 +140,28 @@ class CommandParser:
         m = self._RE_MOUSE_CLICK.fullmatch(spec.strip())
         if m:
             return MouseClickToken(btn=m.group("btn").lower())
+        # Random text generation
+        m = self._RE_RANDOM.fullmatch(spec.strip())
+        if m:
+            length = int(m.group("length"))
+            charset = m.group("charset") or "alphanumeric"
+            return RandomTextToken(length=length, charset=charset)
+        # Variable set
+        m = self._RE_VAR_SET.fullmatch(spec.strip())
+        if m:
+            return VariableToken(
+                name=m.group("name"), value=m.group("value"), action="set"
+            )
+        # Variable get
+        m = self._RE_VAR_GET.fullmatch(spec.strip())
+        if m:
+            return VariableToken(name=m.group("name"), action="get")
+        # Speed change
+        m = self._RE_SPEED.fullmatch(spec.strip())
+        if m:
+            speed = float(m.group("speed"))
+            variance = float(m.group("variance")) if m.group("variance") else None
+            return SpeedToken(speed=speed, variance=variance)
         # Key combination - strip for patterns
         parts = [p.strip() for p in re.split(r"\s*\+\s*", spec.strip())]
         keys: List[str] = []
