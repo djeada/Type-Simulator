@@ -3,6 +3,7 @@ import time
 import random
 import shutil
 import logging
+import string
 import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -189,8 +190,6 @@ class RandomTextToken(Token):
     charset: str = "alphanumeric"  # alphanumeric, alpha, numeric, custom:abc123
 
     def execute(self, executor: "Typist") -> None:
-        import string
-
         if self.charset == "alphanumeric":
             chars = string.ascii_letters + string.digits
         elif self.charset == "alpha":

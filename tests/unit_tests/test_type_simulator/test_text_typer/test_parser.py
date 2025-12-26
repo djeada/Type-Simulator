@@ -137,7 +137,7 @@ def test_parse_repeat_token():
     parser = CommandParser()
     tokens = parser.parse("{REPEAT_3}Hello {/REPEAT}")
     assert len(tokens) == 1
-    assert type(tokens[0]).__name__ == "RepeatToken"
+    assert isinstance(tokens[0], RepeatToken)
     assert tokens[0].count == 3
     assert len(tokens[0].tokens) == 1
     assert tokens[0].tokens[0].text == "Hello "
@@ -148,10 +148,10 @@ def test_parse_nested_repeat():
     parser = CommandParser()
     tokens = parser.parse("{REPEAT_2}{REPEAT_3}X{/REPEAT}{/REPEAT}")
     assert len(tokens) == 1
-    assert type(tokens[0]).__name__ == "RepeatToken"
+    assert isinstance(tokens[0], RepeatToken)
     assert tokens[0].count == 2
     inner = tokens[0].tokens[0]
-    assert type(inner).__name__ == "RepeatToken"
+    assert isinstance(inner, RepeatToken)
     assert inner.count == 3
 
 
@@ -160,7 +160,7 @@ def test_parse_random_token():
     parser = CommandParser()
     tokens = parser.parse("{RANDOM_10}")
     assert len(tokens) == 1
-    assert type(tokens[0]).__name__ == "RandomTextToken"
+    assert isinstance(tokens[0], RandomTextToken)
     assert tokens[0].length == 10
     assert tokens[0].charset == "alphanumeric"
 
@@ -179,7 +179,7 @@ def test_parse_speed_token():
     parser = CommandParser()
     tokens = parser.parse("{SPEED_0.1}")
     assert len(tokens) == 1
-    assert type(tokens[0]).__name__ == "SpeedToken"
+    assert isinstance(tokens[0], SpeedToken)
     assert tokens[0].speed == pytest.approx(0.1)
     assert tokens[0].variance is None
 
@@ -198,7 +198,7 @@ def test_parse_variable_set():
     parser = CommandParser()
     tokens = parser.parse("{SET_myvar=hello world}")
     assert len(tokens) == 1
-    assert type(tokens[0]).__name__ == "VariableToken"
+    assert isinstance(tokens[0], VariableToken)
     assert tokens[0].name == "myvar"
     assert tokens[0].value == "hello world"
     assert tokens[0].action == "set"
@@ -209,7 +209,7 @@ def test_parse_variable_get():
     parser = CommandParser()
     tokens = parser.parse("{GET_myvar}")
     assert len(tokens) == 1
-    assert type(tokens[0]).__name__ == "VariableToken"
+    assert isinstance(tokens[0], VariableToken)
     assert tokens[0].name == "myvar"
     assert tokens[0].action == "get"
 
@@ -220,7 +220,7 @@ def test_parse_complex_macro():
     macro = "{SPEED_0.1}Hello{WAIT_1}{REPEAT_2} World{/REPEAT}"
     tokens = parser.parse(macro)
     assert len(tokens) == 4
-    assert type(tokens[0]).__name__ == "SpeedToken"
-    assert type(tokens[1]).__name__ == "TextToken"
-    assert type(tokens[2]).__name__ == "WaitToken"
-    assert type(tokens[3]).__name__ == "RepeatToken"
+    assert isinstance(tokens[0], SpeedToken)
+    assert isinstance(tokens[1], TextToken)
+    assert isinstance(tokens[2], WaitToken)
+    assert isinstance(tokens[3], RepeatToken)
