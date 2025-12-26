@@ -109,7 +109,10 @@ Available Profiles:
         self.add_argument(
             "-i",
             "--input",
-            help="Input text to be typed. If a valid file path, reads from file; otherwise, treats as literal text. Required unless input is piped via STDIN.",
+            help=(
+                "Input text to be typed. If a valid file path, reads from file; "
+                "otherwise, treats as literal text. Required unless input is piped via STDIN."
+            ),
             type=str,
             required=False,
             default=None,
@@ -119,7 +122,10 @@ Available Profiles:
         self.add_argument(
             "-o",
             "--output",
-            help="Output file path (only used in direct mode). Optional. If not provided in direct mode, will raise an error.",
+            help=(
+                "Output file path (only used in direct mode). "
+                "If not provided in direct mode, will raise an error."
+            ),
             required=False,
             default=None,
         )
