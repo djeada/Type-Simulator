@@ -3,6 +3,7 @@ import time
 import random
 import shutil
 import logging
+import string
 import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -164,3 +165,82 @@ class MouseClickToken(Token):
         executor.backend.click(
             button=self.button, clicks=self.clicks, interval=self.interval
         )
+
+
+@dataclass
+class RepeatToken(Token):
+    """Repeat a sequence of tokens N times."""
+
+    count: int
+    tokens: List[Token]
+
+    def execute(self, executor: "Typist") -> None:
+        logger.debug("Repeating %d tokens %d time(s)", len(self.tokens), self.count)
+        for i in range(self.count):
+            logger.debug("Repeat iteration %d/%d", i + 1, self.count)
+            for token in self.tokens:
+                token.execute(executor)
+
+
+@dataclass
+class RandomTextToken(Token):
+    """Generate random text of specified length and character set."""
+
+    length: int
+    charset: str = "alphanumeric"  # alphanumeric, alpha, numeric, custom:abc123
+
+    def execute(self, executor: "Typist") -> None:
+        if self.charset == "alphanumeric":
+            chars = string.ascii_letters + string.digits
+        elif self.charset == "alpha":
+            chars = string.ascii_letters
+        elif self.charset == "numeric":
+            chars = string.digits
+        elif self.charset.startswith("custom:"):
+            chars = self.charset[7:]
+        else:
+            chars = string.ascii_letters + string.digits
+
+        text = "".join(random.choice(chars) for _ in range(self.length))
+        logger.debug("Typing random text: %s", text)
+        TextToken(text).execute(executor)
+
+
+@dataclass
+class VariableToken(Token):
+    """Store or retrieve a variable value."""
+
+    name: str
+    value: Optional[str] = None
+    action: str = "get"  # get, set
+
+    def execute(self, executor: "Typist") -> None:
+        if not hasattr(executor, "_variables"):
+            executor._variables = {}
+
+        if self.action == "set":
+            executor._variables[self.name] = self.value
+            logger.debug("Set variable %s = %s", self.name, self.value)
+        else:  # get
+            val = executor._variables.get(self.name, "")
+            logger.debug("Get variable %s = %s", self.name, val)
+            if val:
+                TextToken(val).execute(executor)
+
+
+@dataclass
+class SpeedToken(Token):
+    """Temporarily change typing speed for following tokens."""
+
+    speed: float
+    variance: Optional[float] = None
+
+    def execute(self, executor: "Typist") -> None:
+        logger.debug(
+            "Changing typing speed to %0.3fs (variance: %s)",
+            self.speed,
+            self.variance,
+        )
+        executor.typing_speed = self.speed
+        if self.variance is not None:
+            executor.typing_variance = self.variance

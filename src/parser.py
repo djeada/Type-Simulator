@@ -9,7 +9,10 @@ that exits before any GUI imports are performed.
 import argparse
 
 # bump this on every release
-VERSION = "1.0.0"
+VERSION = "2.0.0"
+
+# Available typing profiles
+TYPING_PROFILES = ["human", "fast", "slow", "robotic", "hunt_and_peck"]
 
 
 class TypeSimulatorParser(argparse.ArgumentParser):
@@ -25,6 +28,28 @@ class TypeSimulatorParser(argparse.ArgumentParser):
         super().__init__(
             prog="type_simulator",
             description="Simulate human-like typing in an editor or window.",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog="""
+Examples:
+  # Basic direct mode
+  python -m src.main --mode direct --output demo.txt --input "Hello, World!"
+
+  # Use a typing profile
+  python -m src.main --mode direct --output demo.txt --input "Fast typing" --profile fast
+
+  # Show statistics after completion
+  python -m src.main --mode direct --output demo.txt --input "Test" --stats
+
+  # Use repeat blocks in input
+  python -m src.main --mode direct --output demo.txt --input "{REPEAT_3}Hello {/REPEAT}"
+
+Available Profiles:
+  human        - Natural typing with realistic variations
+  fast         - Quick professional typing
+  slow         - Careful, deliberate typing
+  robotic      - Mechanical, consistent typing
+  hunt_and_peck - Slow, searching for keys
+            """,
         )
 
         # editorlauncher
@@ -56,22 +81,38 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             "-s",
             "--speed",
             type=float,
-            default=0.15,
-            help="Typing speed, in seconds per character.",
+            default=None,
+            help="Typing speed, in seconds per character. Overrides profile setting.",
         )
         self.add_argument(
             "-v",
             "--variance",
             type=float,
-            default=0.05,
-            help="Random variation in typing speed.",
+            default=None,
+            help="Random variation in typing speed. Overrides profile setting.",
+        )
+
+        # typing profile
+        self.add_argument(
+            "-p",
+            "--profile",
+            choices=TYPING_PROFILES,
+            default=None,
+            help=(
+                "Use a preset typing profile. "
+                "Profiles: human, fast, slow, robotic, hunt_and_peck. "
+                "Speed and variance flags override profile settings."
+            ),
         )
 
         # input text (single flag only)
         self.add_argument(
             "-i",
             "--input",
-            help="Input text to be typed. If a valid file path, reads from file; otherwise, treats as literal text. Required unless input is piped via STDIN.",
+            help=(
+                "Input text to be typed. If a valid file path, reads from file; "
+                "otherwise, treats as literal text. Required unless input is piped via STDIN."
+            ),
             type=str,
             required=False,
             default=None,
@@ -81,7 +122,10 @@ class TypeSimulatorParser(argparse.ArgumentParser):
         self.add_argument(
             "-o",
             "--output",
-            help="Output file path (only used in direct mode). Optional. If not provided in direct mode, will raise an error.",
+            help=(
+                "Output file path (only used in direct mode). "
+                "If not provided in direct mode, will raise an error."
+            ),
             required=False,
             default=None,
         )
@@ -130,6 +174,22 @@ class TypeSimulatorParser(argparse.ArgumentParser):
             "--dry-run",
             action="store_true",
             help="Validate input without executing actions. Useful for checking if commands are parsable.",
+            default=False,
+        )
+
+        # statistics flag
+        self.add_argument(
+            "--stats",
+            action="store_true",
+            help="Show statistics after completion (characters typed, time taken, WPM).",
+            default=False,
+        )
+
+        # list profiles
+        self.add_argument(
+            "--list-profiles",
+            action="store_true",
+            help="List all available typing profiles and exit.",
             default=False,
         )
 
