@@ -70,11 +70,16 @@ cd Type-Simulator
 pip install -r requirements.txt
 ```
 
-**Dependencies include:**
+**Key dependencies include:**
 - PyAutoGUI - Cross-platform GUI automation
-- python3-xlib - Python X11 library
+- python3-xlib - Python X11 library (Linux)
 - Pillow - Python Imaging Library
 - pyperclip - Clipboard access
+- PyGetWindow, PyMsgBox, PyRect, PyScreeze - GUI automation components
+- pytweening - Tweening/easing functions
+- MouseInfo - Mouse position information
+
+See `requirements.txt` for the complete list of dependencies.
 
 ### 3. Install System Packages (Linux)
 
@@ -445,8 +450,11 @@ Type-Simulator can be compiled into standalone executables using [Nuitka](https:
 #### Linux Build
 
 ```bash
-# Install Nuitka (if not already installed)
+# Install Nuitka and development dependencies (if not already installed)
 pip install -r requirements-dev.txt
+
+# Or install just Nuitka for building
+pip install nuitka
 
 # Build using the provided script
 cd build
@@ -680,7 +688,7 @@ python -m src.main --list-profiles
 
 ### Adding Custom Special Keys
 
-Extend `src/type_simulator/text_typer/text_typer.py` to handle additional key sequences or commands.
+Extend the TextTyper implementation in `src/type_simulator/text_typer/__main__.py` to handle additional key sequences or commands. The macro parsing logic is in `src/type_simulator/text_typer/parser.py`.
 
 ### Custom Typing Profiles
 
