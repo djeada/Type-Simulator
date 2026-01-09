@@ -129,6 +129,7 @@ class TextTyper:
         self.typing_variance = typing_variance
         self.backend = backend
         self.strict = strict
+        self._lazy_init = lazy_init
         self._parser = CommandParser(strict)
         self._typist = Typist(
             typing_speed, 
@@ -137,11 +138,17 @@ class TextTyper:
             strict, 
             lazy_init=lazy_init
         )
+        # Only set backend immediately if not using lazy initialization
         if not lazy_init and self.backend is None:
             self.backend = self._typist.backend
 
     def simulate_typing(self) -> None:
         """Parse and execute the text with typing simulation."""
+        # Ensure backend is available when we start typing
+        if self.backend is None and self._lazy_init:
+            self._typist._init_backend()
+            self.backend = self._typist.backend
+        
         toks = self._parser.parse(self.text)
         logger.info("Parsed %d tokens", len(toks))
         self._typist.execute(toks)

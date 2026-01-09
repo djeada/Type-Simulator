@@ -329,6 +329,9 @@ class NewlineToken(Token):
 
     def execute(self, executor: "Typist") -> None:
         logger.debug("Inserting %d newline(s)", self.count)
+        # Ensure backend is initialized
+        if not executor._initialized:
+            executor._init_backend()
         for _ in range(self.count):
             executor.backend.press('enter')
             time.sleep(executor.typing_speed)
@@ -342,6 +345,9 @@ class TabToken(Token):
 
     def execute(self, executor: "Typist") -> None:
         logger.debug("Inserting %d tab(s)", self.count)
+        # Ensure backend is initialized
+        if not executor._initialized:
+            executor._init_backend()
         for _ in range(self.count):
             executor.backend.press('tab')
             time.sleep(executor.typing_speed)
