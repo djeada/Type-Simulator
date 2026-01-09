@@ -244,3 +244,110 @@ class SpeedToken(Token):
         executor.typing_speed = self.speed
         if self.variance is not None:
             executor.typing_variance = self.variance
+
+
+@dataclass
+class DateTimeToken(Token):
+    """Insert current date/time with optional format."""
+
+    format: str = "%Y-%m-%d %H:%M:%S"
+
+    def execute(self, executor: "Typist") -> None:
+        from datetime import datetime
+        text = datetime.now().strftime(self.format)
+        logger.debug("Typing datetime: %s (format: %s)", text, self.format)
+        TextToken(text).execute(executor)
+
+
+@dataclass
+class CounterToken(Token):
+    """
+    Manage a counter variable for sequential numbering.
+    
+    Actions:
+        - init: Initialize counter to start value
+        - next: Increment and type the counter value
+        - get: Type the current counter value
+    """
+
+    name: str = "default"
+    action: str = "next"  # init, next, get
+    start: int = 1
+    step: int = 1
+    pad: int = 0  # Padding with zeros
+
+    def execute(self, executor: "Typist") -> None:
+        if not hasattr(executor, "_counters"):
+            executor._counters = {}
+        
+        if self.action == "init":
+            executor._counters[self.name] = self.start
+            logger.debug("Initialized counter %s = %d", self.name, self.start)
+        elif self.action == "next":
+            if self.name not in executor._counters:
+                executor._counters[self.name] = self.start
+            else:
+                executor._counters[self.name] += self.step
+            val = executor._counters[self.name]
+            text = str(val).zfill(self.pad) if self.pad > 0 else str(val)
+            logger.debug("Counter %s = %s", self.name, text)
+            TextToken(text).execute(executor)
+        else:  # get
+            val = executor._counters.get(self.name, self.start)
+            text = str(val).zfill(self.pad) if self.pad > 0 else str(val)
+            logger.debug("Get counter %s = %s", self.name, text)
+            TextToken(text).execute(executor)
+
+
+@dataclass
+class LoopToken(Token):
+    """
+    Loop through a list of values and execute tokens for each.
+    Similar to REPEAT but with iteration variable support.
+    """
+
+    count: int
+    tokens: List[Token]
+    var_name: str = "i"  # Loop variable name
+
+    def execute(self, executor: "Typist") -> None:
+        if not hasattr(executor, "_variables"):
+            executor._variables = {}
+        
+        logger.debug("Loop %d iterations with var %s", self.count, self.var_name)
+        for i in range(self.count):
+            executor._variables[self.var_name] = str(i + 1)  # 1-indexed
+            for token in self.tokens:
+                token.execute(executor)
+
+
+@dataclass
+class NewlineToken(Token):
+    """Insert one or more newlines."""
+
+    count: int = 1
+
+    def execute(self, executor: "Typist") -> None:
+        logger.debug("Inserting %d newline(s)", self.count)
+        # Ensure backend is initialized
+        if not executor._initialized:
+            executor._init_backend()
+        for _ in range(self.count):
+            executor.backend.press('enter')
+            time.sleep(executor.typing_speed)
+
+
+@dataclass
+class TabToken(Token):
+    """Insert one or more tabs."""
+
+    count: int = 1
+
+    def execute(self, executor: "Typist") -> None:
+        logger.debug("Inserting %d tab(s)", self.count)
+        # Ensure backend is initialized
+        if not executor._initialized:
+            executor._init_backend()
+        for _ in range(self.count):
+            executor.backend.press('tab')
+            time.sleep(executor.typing_speed)

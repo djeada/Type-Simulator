@@ -17,40 +17,82 @@ from src.parser import TypeSimulatorParser
 
 
 def print_profiles() -> None:
-    """Print available typing profiles and exit."""
+    """Print available typing profiles with detailed information."""
     from type_simulator.profiles import list_profiles
 
     print("\n🎹 Available Typing Profiles:\n")
-    print("-" * 60)
+    print("=" * 70)
+    print(f"{'Profile':<15} {'Speed':>8} {'Variance':>10} {'Description':<35}")
+    print("=" * 70)
     for name, profile in list_profiles().items():
-        print(f"  {name:15} - {profile.description}")
-        print(f"                  Speed: {profile.speed}s, Variance: {profile.variance}")
-    print("-" * 60)
-    print("\nUse with: --profile <name>")
+        print(f"  {name:<13} {profile.speed:>6.3f}s  ±{profile.variance:<8.3f} {profile.description}")
+    print("=" * 70)
+    print("\n💡 Usage: python -m src.main --profile <name> --mode <mode> --input \"text\"")
+    print("   Example: python -m src.main --profile programmer --mode direct --output code.txt --input \"Hello World!\"")
 
 
-def print_stats(text: str, start_time: float, end_time: float) -> None:
-    """Print typing statistics."""
+def print_stats(text: str, start_time: float, end_time: float, profile_name: str = None) -> None:
+    """Print detailed typing statistics."""
     duration = end_time - start_time
     char_count = len(text)
     word_count = len(text.split())
-
-    # Calculate WPM (assuming average word length of 5 characters)
+    line_count = text.count('\n') + 1
+    
+    # Calculate various metrics
     if duration > 0:
         wpm = (char_count / 5) / (duration / 60)
         cps = char_count / duration
+        wps = word_count / duration * 60 if duration > 0 else 0
     else:
         wpm = 0
         cps = 0
+        wps = 0
+    
+    # Character breakdown
+    alpha_count = sum(1 for c in text if c.isalpha())
+    digit_count = sum(1 for c in text if c.isdigit())
+    space_count = text.count(' ')
+    special_count = char_count - alpha_count - digit_count - space_count
 
-    print("\n📊 Typing Statistics:")
-    print("-" * 40)
-    print(f"  Characters typed: {char_count}")
-    print(f"  Words typed:      {word_count}")
-    print(f"  Time elapsed:     {duration:.2f}s")
-    print(f"  Speed:            {cps:.1f} chars/sec")
-    print(f"  WPM:              {wpm:.1f}")
-    print("-" * 40)
+    print("\n" + "=" * 50)
+    print("📊 TYPING STATISTICS")
+    print("=" * 50)
+    
+    if profile_name:
+        print(f"  🎹 Profile Used:    {profile_name}")
+        print("-" * 50)
+    
+    print("  📝 Content Summary:")
+    print(f"     Characters:      {char_count:,}")
+    print(f"     Words:           {word_count:,}")
+    print(f"     Lines:           {line_count:,}")
+    print("-" * 50)
+    
+    print("  📈 Character Breakdown:")
+    print(f"     Letters:         {alpha_count:,} ({alpha_count/char_count*100:.1f}%)" if char_count > 0 else "     Letters:         0")
+    print(f"     Digits:          {digit_count:,} ({digit_count/char_count*100:.1f}%)" if char_count > 0 else "     Digits:          0")
+    print(f"     Spaces:          {space_count:,} ({space_count/char_count*100:.1f}%)" if char_count > 0 else "     Spaces:          0")
+    print(f"     Special:         {special_count:,} ({special_count/char_count*100:.1f}%)" if char_count > 0 else "     Special:         0")
+    print("-" * 50)
+    
+    print("  ⏱️  Performance:")
+    print(f"     Time Elapsed:    {duration:.2f}s")
+    print(f"     Speed (CPS):     {cps:.1f} chars/sec")
+    print(f"     Speed (WPM):     {wpm:.1f} words/min")
+    print("=" * 50)
+    
+    # Fun comparison
+    if wpm > 0:
+        if wpm > 200:
+            print("  🚀 Speed Rating: LIGHTNING FAST!")
+        elif wpm > 100:
+            print("  ⚡ Speed Rating: Very Fast")
+        elif wpm > 60:
+            print("  ✨ Speed Rating: Professional")
+        elif wpm > 40:
+            print("  👍 Speed Rating: Average")
+        else:
+            print("  🐢 Speed Rating: Careful & Deliberate")
 
 
 def main() -> None:
@@ -152,7 +194,7 @@ def main() -> None:
 
     # Print statistics if requested
     if args.stats:
-        print_stats(text, start_time, end_time)
+        print_stats(text, start_time, end_time, args.profile)
 
 
 if __name__ == "__main__":
