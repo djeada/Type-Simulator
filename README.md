@@ -2,12 +2,21 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.7%2B-blue)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-2.0.0-green)](https://github.com/djeada/Type-Simulator)
+[![Version](https://img.shields.io/badge/version-2.1.0-green)](https://github.com/djeada/Type-Simulator)
 
 **Type-Simulator** is a versatile Python tool for automating human-like typing in any text editor or input field. Whether you're creating demos, running automated tutorials, or stress-testing text-based applications, Type-Simulator lets you control keyboard inputs with precision and randomness for a natural effect.
 
+## 🆕 What's New in v2.1.0
+
+- **5 New Typing Profiles**: `programmer`, `storyteller`, `casual`, `expert`, `nervous`
+- **Enhanced Macro System**: New commands including `{DATE}`, `{TIME}`, `{DATETIME}`, `{COUNTER}`, `{LOOP}`, `{NL}`, `{TAB}`
+- **Improved Statistics**: Detailed character breakdown with emoji indicators
+- **Headless Direct Mode**: Now works without DISPLAY environment variable
+- **Better CLI Experience**: Enhanced help output with examples and profile details
+
 ## 📑 Table of Contents
 
+- [What's New](#-whats-new-in-v210)
 - [Features](#-features)
 - [System Requirements](#-system-requirements)
 - [Installation](#-installation)
@@ -23,6 +32,10 @@
   - [Mouse Control Macros](#mouse-control-macros)
   - [Keyboard Macros](#keyboard-macros)
   - [Variable Macros](#variable-macros)
+  - [Date/Time Macros](#datetime-macros)
+  - [Loop Macros](#loop-macros)
+  - [Counter Macros](#counter-macros)
+  - [Formatting Macros](#formatting-macros)
 - [Build & Distribution](#-build--distribution)
 - [Advanced Usage](#-advanced-usage)
 - [Troubleshooting](#-troubleshooting)
@@ -32,16 +45,16 @@
 ## 🚀 Features
 
 - **Human-Like Typing**: Configurable speed and variance simulate real typing habits
-- **Typing Profiles**: Pre-built profiles (human, fast, slow, robotic, hunt-and-peck) for different scenarios
+- **10 Typing Profiles**: Pre-built profiles for different scenarios including human, fast, slow, robotic, programmer, expert, and more
 - **Editor Agnostic**: Works with any text editor or input field
 - **Flexible Input**: Accept text from command line, files, or STDIN
 - **Multiple Modes**: 
   - **GUI Mode**: Drive a full editor (e.g., vim, gedit) under Xvfb for headless CI
   - **Terminal Mode**: Open a terminal emulator for shell-driven typing
-  - **Direct Mode**: Write text straight to a file without a GUI
+  - **Direct Mode**: Write text straight to a file without a GUI (no DISPLAY required)
   - **Focus Mode**: Type directly into the currently focused window
-- **Powerful Macro System**: Support for repeat blocks, random text, speed changes, variables, waits, mouse actions, and key combinations
-- **Statistics**: Get detailed typing statistics including WPM, characters per second, and duration
+- **Powerful Macro System**: Support for repeat blocks, loops, random text, speed changes, variables, waits, mouse actions, key combinations, date/time, counters, and formatting
+- **Statistics**: Get detailed typing statistics including WPM, character breakdown, and duration
 - **Dry Run**: Validate input without executing actions
 - **Verbose Logging**: Adjustable log levels (DEBUG, INFO, WARNING, ERROR) for troubleshooting
 
@@ -222,11 +235,16 @@ Type-Simulator includes pre-configured typing profiles that simulate different t
 
 | Profile | Speed | Variance | Description |
 |---------|-------|----------|-------------|
-| `human` | 0.08s | 0.04 | Natural human typing with realistic variations |
-| `fast` | 0.03s | 0.01 | Quick professional typing |
-| `slow` | 0.2s | 0.08 | Careful, deliberate typing |
+| `human` | 0.08s | ±0.04 | Natural human typing with realistic variations |
+| `fast` | 0.03s | ±0.01 | Quick professional typing |
+| `slow` | 0.2s | ±0.08 | Careful, deliberate typing |
 | `robotic` | 0.05s | 0.0 | Mechanical, consistent typing with no variance |
-| `hunt_and_peck` | 0.4s | 0.2 | Slow, searching for keys typing style |
+| `hunt_and_peck` | 0.4s | ±0.2 | Slow, searching for keys typing style |
+| `programmer` | 0.05s | ±0.03 | Fast typing with thinking pauses for coding |
+| `storyteller` | 0.1s | ±0.05 | Dramatic typing with pauses for effect |
+| `casual` | 0.12s | ±0.08 | Relaxed, informal typing rhythm |
+| `expert` | 0.02s | ±0.005 | Ultra-fast professional touch typist |
+| `nervous` | 0.06s | ±0.04 | Quick bursts with frequent hesitations |
 
 **Usage:**
 
@@ -408,6 +426,76 @@ python -m src.main --mode focus --input "{SET_msg=Hello }{REPEAT_3}{GET_msg}{/RE
 # Output: "Hello Hello Hello "
 ```
 
+### Date/Time Macros
+
+Insert current date and time with optional formatting.
+
+**Syntax:**
+- Full datetime: `{DATETIME}` or `{DATETIME_format}`
+- Date only: `{DATE}`
+- Time only: `{TIME}`
+
+```bash
+# Insert current datetime (YYYY-MM-DD HH:MM:SS)
+python -m src.main --mode focus --input "Log entry at {DATETIME}"
+
+# Custom format
+python -m src.main --mode focus --input "Today is {DATETIME_%Y/%m/%d}"
+
+# Date only (YYYY-MM-DD)
+python -m src.main --mode focus --input "Date: {DATE}"
+
+# Time only (HH:MM:SS)
+python -m src.main --mode focus --input "Time: {TIME}"
+```
+
+### Loop Macros
+
+Loop through iterations with an accessible loop variable.
+
+**Syntax:** `{LOOP_N}...text...{/LOOP}` or `{LOOP_N_varname}...{/LOOP}`
+
+```bash
+# Simple loop (uses default variable 'i')
+python -m src.main --mode focus --input "{LOOP_5}Item {GET_i} {/LOOP}"
+# Output: "Item 1 Item 2 Item 3 Item 4 Item 5 "
+
+# Loop with custom variable name
+python -m src.main --mode focus --input "{LOOP_3_num}Line {GET_num}{NL}{/LOOP}"
+# Output: "Line 1\nLine 2\nLine 3\n"
+```
+
+### Counter Macros
+
+Manage sequential counters for auto-numbering.
+
+**Syntax:** `{COUNTER}` or `{COUNTER_name}` or `{COUNTER_name_action}`
+
+```bash
+# Simple counter (auto-increments)
+python -m src.main --mode focus --input "{COUNTER}. Item A{NL}{COUNTER}. Item B{NL}{COUNTER}. Item C"
+# Output: "1. Item A\n2. Item B\n3. Item C"
+
+# Named counter
+python -m src.main --mode focus --input "{COUNTER_items}. First{NL}{COUNTER_items}. Second"
+```
+
+### Formatting Macros
+
+Insert newlines and tabs for formatting.
+
+**Syntax:**
+- Newline: `{NEWLINE}` or `{NL}` (with optional count: `{NL_3}`)
+- Tab: `{TAB}` (with optional count: `{TAB_2}`)
+
+```bash
+# Insert newlines
+python -m src.main --mode focus --input "Line 1{NL}Line 2{NL_2}Line 3"
+
+# Insert tabs for indentation
+python -m src.main --mode focus --input "Name:{TAB}Value{NL}Age:{TAB}25"
+```
+
 ### Literal Braces
 
 To type literal curly braces, escape them with backslash:
@@ -439,6 +527,22 @@ Password: {RANDOM_12}{<enter>}
 {WAIT_0.5}
 {REPEAT_3}Processing{WAIT_0.5}{<backspace>+{WAIT_0.3}{/REPEAT}
 Done!"
+```
+
+### Advanced Macro Example
+
+Using loops, counters, and datetime:
+
+```bash
+python -m src.main --mode focus --input "
+Log started at {DATETIME}
+{NL_2}
+{LOOP_5}
+{TAB}{COUNTER}. Entry at {TIME}{NL}
+{/LOOP}
+{NL}
+Log completed at {DATETIME}
+"
 ```
 
 ## 🏗️ Build & Distribution
