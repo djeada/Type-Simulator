@@ -1,25 +1,39 @@
 #!/usr/bin/env python3
 # src/type_simulator/type_simulator.py
+"""
+Type-Simulator core module.
+
+This module provides the main TypeSimulator class that orchestrates
+typing text into various destinations using different modes.
+"""
 import logging
 import time
 import subprocess  # for process handles
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Union
-
-import pyautogui
+from typing import Optional, Union, TYPE_CHECKING
 
 from type_simulator.editor_manager import EditorManager
 from type_simulator.file_manager import FileManager
-
 from type_simulator.text_typer.__main__ import TextTyper
+
+# Lazy import for pyautogui to allow direct mode without DISPLAY
+if TYPE_CHECKING:
+    import pyautogui as _pyautogui
+
+
+def _get_pyautogui():
+    """Lazily import pyautogui only when needed for GUI operations."""
+    import pyautogui
+    return pyautogui
 
 
 class Mode(Enum):
+    """Typing mode enumeration."""
     GUI = "gui"
     TERMINAL = "terminal"
     DIRECT = "direct"
-    FOCUS = "focus"  # New mode for focus typing
+    FOCUS = "focus"
 
 
 class TypeSimulator:
@@ -96,7 +110,9 @@ class TypeSimulator:
         self.wait = wait
         self.file_manager = FileManager(str(file_path)) if file_path else None
         self.text = text
-        self.texter = TextTyper(text, typing_speed, typing_variance)
+        # Use lazy initialization for direct mode (no GUI needed)
+        lazy_init = self.mode == Mode.DIRECT
+        self.texter = TextTyper(text, typing_speed, typing_variance, lazy_init=lazy_init)
         self.pre_launch_cmd = pre_launch_cmd
         if self.mode in (Mode.GUI, Mode.TERMINAL):
             # Always honor explicit editor_cmd if provided
@@ -173,6 +189,7 @@ class TypeSimulator:
 
         if self.mode == Mode.GUI:
             self.logger.debug("Entering insert mode")
+            pyautogui = _get_pyautogui()
             pyautogui.press("i")
             time.sleep(0.1)
 
@@ -188,6 +205,7 @@ class TypeSimulator:
 
         closing_done = False
         if self.mode == Mode.GUI and self.editor_manager:
+            pyautogui = _get_pyautogui()
             # Try to detect the editor and send the right closing sequence
             editor_cmd = self.editor_manager.editor_cmd.lower()
             self.logger.debug(f"Attempting to close editor: {editor_cmd}")

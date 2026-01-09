@@ -9,10 +9,13 @@ that exits before any GUI imports are performed.
 import argparse
 
 # bump this on every release
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 # Available typing profiles
-TYPING_PROFILES = ["human", "fast", "slow", "robotic", "hunt_and_peck"]
+TYPING_PROFILES = [
+    "human", "fast", "slow", "robotic", "hunt_and_peck",
+    "programmer", "storyteller", "casual", "expert", "nervous"
+]
 
 
 class TypeSimulatorParser(argparse.ArgumentParser):
@@ -27,14 +30,14 @@ class TypeSimulatorParser(argparse.ArgumentParser):
     def __init__(self) -> None:
         super().__init__(
             prog="type_simulator",
-            description="Simulate human-like typing in an editor or window.",
+            description="🎹 Type-Simulator - Simulate human-like typing in any editor or window.",
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog="""
 Examples:
-  # Basic direct mode
+  # Basic direct mode - write to file
   python -m src.main --mode direct --output demo.txt --input "Hello, World!"
 
-  # Use a typing profile
+  # Use a typing profile for natural typing
   python -m src.main --mode direct --output demo.txt --input "Fast typing" --profile fast
 
   # Show statistics after completion
@@ -43,12 +46,32 @@ Examples:
   # Use repeat blocks in input
   python -m src.main --mode direct --output demo.txt --input "{REPEAT_3}Hello {/REPEAT}"
 
+  # Use macros for complex automation
+  python -m src.main --mode focus --input "{SET_name=World}Hello, {GET_name}!"
+
 Available Profiles:
-  human        - Natural typing with realistic variations
-  fast         - Quick professional typing
-  slow         - Careful, deliberate typing
-  robotic      - Mechanical, consistent typing
-  hunt_and_peck - Slow, searching for keys
+  human         - Natural typing with realistic variations (0.08s, ±0.04)
+  fast          - Quick professional typing (0.03s, ±0.01)
+  slow          - Careful, deliberate typing (0.2s, ±0.08)
+  robotic       - Mechanical, consistent typing (0.05s, no variance)
+  hunt_and_peck - Slow, searching for keys (0.4s, ±0.2)
+  programmer    - Fast with thinking pauses (0.05s, ±0.03)
+  storyteller   - Dramatic pauses for effect (0.1s, ±0.05)
+  casual        - Relaxed, informal rhythm (0.12s, ±0.08)
+  expert        - Ultra-fast touch typist (0.02s, ±0.005)
+  nervous       - Quick bursts with hesitations (0.06s, ±0.04)
+
+Macro Commands:
+  {REPEAT_N}...{/REPEAT}  - Repeat text N times
+  {RANDOM_N}              - Generate N random characters
+  {WAIT_N}                - Wait N seconds
+  {SPEED_N}               - Change typing speed to N seconds
+  {SET_var=value}         - Set a variable
+  {GET_var}               - Get a variable value
+  {<key>}                 - Press a key (enter, esc, tab, etc.)
+  {<ctrl>+<key>}          - Key combination
+
+For more information, visit: https://github.com/djeada/Type-Simulator
             """,
         )
 

@@ -63,3 +63,59 @@ def test_list_profiles():
     assert "slow" in profiles
     assert "robotic" in profiles
     assert "hunt_and_peck" in profiles
+
+
+# Tests for new profiles
+
+
+def test_get_profile_programmer():
+    """Test getting the programmer profile."""
+    profile = get_profile("programmer")
+    assert profile is not None
+    assert profile.name == "programmer"
+    assert profile.speed == 0.05
+    assert profile.variance == 0.03
+
+
+def test_get_profile_storyteller():
+    """Test getting the storyteller profile."""
+    profile = get_profile("storyteller")
+    assert profile is not None
+    assert profile.name == "storyteller"
+    assert profile.speed == 0.1
+    assert profile.pause_probability == 0.25
+
+
+def test_get_profile_casual():
+    """Test getting the casual profile."""
+    profile = get_profile("casual")
+    assert profile is not None
+    assert profile.name == "casual"
+    assert profile.speed == 0.12
+
+
+def test_get_profile_expert():
+    """Test getting the expert profile."""
+    profile = get_profile("expert")
+    assert profile is not None
+    assert profile.name == "expert"
+    assert profile.speed == 0.02
+    assert profile.variance == 0.005
+
+
+def test_get_profile_nervous():
+    """Test getting the nervous profile."""
+    profile = get_profile("nervous")
+    assert profile is not None
+    assert profile.name == "nervous"
+    assert profile.speed == 0.06
+    assert profile.pause_probability == 0.3
+
+
+def test_list_profiles_includes_new():
+    """Test that list_profiles includes all new profiles."""
+    profiles = list_profiles()
+    assert len(profiles) >= 10  # 5 original + 5 new
+    new_profiles = ["programmer", "storyteller", "casual", "expert", "nervous"]
+    for name in new_profiles:
+        assert name in profiles, f"Profile '{name}' not found in profiles"
