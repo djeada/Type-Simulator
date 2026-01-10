@@ -112,25 +112,32 @@ class TypeSimulator:
         self.wait = wait
         self.file_manager = FileManager(str(file_path)) if file_path else None
         self.text = text
-        # Use lazy initialization for direct mode (no GUI needed)
-        lazy_init = self.mode == Mode.DIRECT
-        self.texter = TextTyper(
-            text, typing_speed, typing_variance, lazy_init=lazy_init
-        )
         self.pre_launch_cmd = pre_launch_cmd
+        
+        # Check for terminal availability early (before TextTyper init)
+        # so users get a helpful error message about missing terminals
         if self.mode in (Mode.GUI, Mode.TERMINAL):
             # Always honor explicit editor_cmd if provided
             if editor_cmd:
                 cmd = editor_cmd
             else:
-                cmd = (
-                    "xterm -fa 'Monospace' -fs 10 -e vi"
-                    if self.mode == Mode.GUI
-                    else "xterm -e bash"
-                )
+                if self.mode == Mode.GUI:
+                    cmd = "xterm -fa 'Monospace' -fs 10 -e vi"
+                else:
+                    # Terminal mode: detect available terminal emulator
+                    from utils.utils import get_default_terminal_command
+                    cmd, error = get_default_terminal_command()
+                    if cmd is None:
+                        raise RuntimeError(error)
             self.editor_manager = EditorManager(cmd)
         else:
             self.editor_manager = None
+        
+        # Use lazy initialization for direct mode (no GUI needed)
+        lazy_init = self.mode == Mode.DIRECT
+        self.texter = TextTyper(
+            text, typing_speed, typing_variance, lazy_init=lazy_init
+        )
 
     def _execute_pre_launch_cmd(self) -> None:
         """Execute the pre-launch command if one is specified."""
