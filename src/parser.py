@@ -224,6 +224,14 @@ For more information, visit: https://github.com/djeada/Type-Simulator
             default=False,
         )
 
+        # check terminal availability
+        self.add_argument(
+            "--check-terminals",
+            action="store_true",
+            help="Check and display available terminal emulators on this system.",
+            default=False,
+        )
+
     def parse(self):
         """Parse and return command-line arguments."""
         return self.parse_args()
