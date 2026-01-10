@@ -232,6 +232,18 @@ For more information, visit: https://github.com/djeada/Type-Simulator
             default=False,
         )
 
+        # geometry for terminal mode
+        self.add_argument(
+            "-g",
+            "--geometry",
+            help=(
+                "Terminal window geometry (only used in terminal mode). "
+                "Format: WIDTHxHEIGHT (e.g., '80x24' for 80 columns by 24 rows)."
+            ),
+            type=str,
+            default=None,
+        )
+
     def parse(self):
         """Parse and return command-line arguments."""
         return self.parse_args()

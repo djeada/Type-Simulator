@@ -193,6 +193,7 @@ def main() -> None:
         typing_variance=typing_variance,
         wait=args.wait,
         mode=args.mode,
+        geometry=args.geometry,
     )
 
     if args.dry_run:

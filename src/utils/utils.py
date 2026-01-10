@@ -10,30 +10,35 @@ def is_program_installed(program):
 
 
 # Terminal emulators with their metadata
-# Format: (executable, command_template, description, install_hint)
+# Format: (executable, command_template, description, install_hint, geometry_format)
+# geometry_format: how to specify geometry (None if not supported, format string with {geometry} placeholder)
 LINUX_TERMINALS = [
     ("gnome-terminal", "gnome-terminal -- bash", "GNOME Terminal (default for GNOME/Linux Mint)", 
-     "sudo apt install gnome-terminal"),
+     "sudo apt install gnome-terminal", "gnome-terminal --geometry={geometry} -- bash"),
     ("konsole", "konsole -e bash", "Konsole (default for KDE)", 
-     "sudo apt install konsole"),
+     "sudo apt install konsole", "konsole -e bash"),
     ("xfce4-terminal", "xfce4-terminal -e bash", "XFCE Terminal (default for XFCE)", 
-     "sudo apt install xfce4-terminal"),
+     "sudo apt install xfce4-terminal", "xfce4-terminal --geometry={geometry} -e bash"),
     ("mate-terminal", "mate-terminal -e bash", "MATE Terminal (default for MATE)", 
-     "sudo apt install mate-terminal"),
+     "sudo apt install mate-terminal", "mate-terminal --geometry={geometry} -e bash"),
     ("tilix", "tilix -e bash", "Tilix (tiling terminal)", 
-     "sudo apt install tilix"),
+     "sudo apt install tilix", "tilix -e bash"),
     ("kitty", "kitty bash", "Kitty (GPU-accelerated terminal)", 
-     "sudo apt install kitty"),
+     "sudo apt install kitty", "kitty bash"),
     ("alacritty", "alacritty -e bash", "Alacritty (GPU-accelerated terminal)", 
-     "sudo apt install alacritty"),
+     "sudo apt install alacritty", "alacritty -e bash"),
     ("xterm", "xterm -e bash", "XTerm (classic X11 terminal)", 
-     "sudo apt install xterm"),
+     "sudo apt install xterm", "xterm -geometry {geometry} -e bash"),
 ]
 
 
-def get_default_terminal_command():
+def get_default_terminal_command(geometry=None):
     """
     Detect and return a command to open a terminal emulator.
+    
+    Args:
+        geometry: Optional terminal geometry string (e.g., '80x24').
+                  Only used in terminal mode on Linux for supported terminals.
     
     Returns a tuple of (command_string, None) on success,
     or (None, error_message) if no terminal is found.
@@ -52,8 +57,10 @@ def get_default_terminal_command():
         return ("open -a Terminal", None)
     
     elif system == "Linux":
-        for executable, cmd_template, _, _ in LINUX_TERMINALS:
+        for executable, cmd_template, _, _, geometry_template in LINUX_TERMINALS:
             if shutil.which(executable):
+                if geometry and geometry_template and "{geometry}" in geometry_template:
+                    return (geometry_template.format(geometry=geometry), None)
                 return (cmd_template, None)
         
         # No terminal found
@@ -116,7 +123,7 @@ def check_terminal_availability():
     elif system == "Linux":
         print("\n📋 Checking Linux terminal emulators:\n")
         
-        for executable, cmd_template, description, install_hint in LINUX_TERMINALS:
+        for executable, cmd_template, description, install_hint, _ in LINUX_TERMINALS:
             path = shutil.which(executable)
             if path:
                 print(f"   ✅ {executable}")
