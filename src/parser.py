@@ -13,8 +13,16 @@ VERSION = "2.1.1"
 
 # Available typing profiles
 TYPING_PROFILES = [
-    "human", "fast", "slow", "robotic", "hunt_and_peck",
-    "programmer", "storyteller", "casual", "expert", "nervous"
+    "human",
+    "fast",
+    "slow",
+    "robotic",
+    "hunt_and_peck",
+    "programmer",
+    "storyteller",
+    "casual",
+    "expert",
+    "nervous",
 ]
 
 

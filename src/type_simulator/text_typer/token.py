@@ -74,9 +74,9 @@ class TextToken(Token):
                 + executor.typing_variance * (2 * random.random() - 1),
             )
             # Handle newline as Enter keypress
-            if ch == '\n':
+            if ch == "\n":
                 logger.debug("Typing newline via Enter key")
-                executor.backend.press('enter')
+                executor.backend.press("enter")
                 time.sleep(interval)
             elif ch in PROBLEMATIC_CHARS:
                 if self._paste_character(ch, executor):
@@ -254,6 +254,7 @@ class DateTimeToken(Token):
 
     def execute(self, executor: "Typist") -> None:
         from datetime import datetime
+
         text = datetime.now().strftime(self.format)
         logger.debug("Typing datetime: %s (format: %s)", text, self.format)
         TextToken(text).execute(executor)
@@ -263,7 +264,7 @@ class DateTimeToken(Token):
 class CounterToken(Token):
     """
     Manage a counter variable for sequential numbering.
-    
+
     Actions:
         - init: Initialize counter to start value
         - next: Increment and type the counter value
@@ -279,7 +280,7 @@ class CounterToken(Token):
     def execute(self, executor: "Typist") -> None:
         if not hasattr(executor, "_counters"):
             executor._counters = {}
-        
+
         if self.action == "init":
             executor._counters[self.name] = self.start
             logger.debug("Initialized counter %s = %d", self.name, self.start)
@@ -313,7 +314,7 @@ class LoopToken(Token):
     def execute(self, executor: "Typist") -> None:
         if not hasattr(executor, "_variables"):
             executor._variables = {}
-        
+
         logger.debug("Loop %d iterations with var %s", self.count, self.var_name)
         for i in range(self.count):
             executor._variables[self.var_name] = str(i + 1)  # 1-indexed
@@ -333,7 +334,7 @@ class NewlineToken(Token):
         if not executor._initialized:
             executor._init_backend()
         for _ in range(self.count):
-            executor.backend.press('enter')
+            executor.backend.press("enter")
             time.sleep(executor.typing_speed)
 
 
@@ -349,5 +350,5 @@ class TabToken(Token):
         if not executor._initialized:
             executor._init_backend()
         for _ in range(self.count):
-            executor.backend.press('tab')
+            executor.backend.press("tab")
             time.sleep(executor.typing_speed)

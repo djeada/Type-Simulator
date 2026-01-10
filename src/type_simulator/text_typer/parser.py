@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class CommandParser:
     """
     Parses command strings with embedded control sequences into a list of Tokens.
-    
+
     Supports:
     - Literal braces (escape with backslash)
     - Wait/pause commands
@@ -109,7 +109,9 @@ class CommandParser:
                 # Check for REPEAT_N start
                 m = self._RE_REPEAT_START.fullmatch(spec.strip())
                 if m:
-                    block_stack.append(("repeat", int(m.group("count")), len(tokens), None))
+                    block_stack.append(
+                        ("repeat", int(m.group("count")), len(tokens), None)
+                    )
                     idx = end_idx + 1
                     continue
 
@@ -127,7 +129,9 @@ class CommandParser:
                 m = self._RE_LOOP_START.fullmatch(spec.strip())
                 if m:
                     var_name = m.group("var") or "i"
-                    block_stack.append(("loop", int(m.group("count")), len(tokens), var_name))
+                    block_stack.append(
+                        ("loop", int(m.group("count")), len(tokens), var_name)
+                    )
                     idx = end_idx + 1
                     continue
 
@@ -151,6 +155,7 @@ class CommandParser:
                         s = s.replace("\\", r"\\")
                         s = s.replace("\n", r"\n").replace("\r", r"\r")
                         return s
+
                     preview = _escape(spec)
                     if len(preview) > 200:
                         preview = preview[:200] + "…"
@@ -177,64 +182,64 @@ class CommandParser:
         # Empty braces means literal {}
         if spec == "":
             return TextToken("{}")
-        
+
         stripped = spec.strip()
-        
+
         # Wait
         m = self._RE_WAIT.fullmatch(stripped)
         if m:
             return WaitToken(float(m.group("secs")))
-        
+
         # Mouse move
         m = self._RE_MOUSE_MOVE.fullmatch(stripped)
         if m:
             return MouseMoveToken(int(m.group("x")), int(m.group("y")))
-        
+
         # Mouse click
         m = self._RE_MOUSE_CLICK.fullmatch(stripped)
         if m:
             return MouseClickToken(btn=m.group("btn").lower())
-        
+
         # Random text generation
         m = self._RE_RANDOM.fullmatch(stripped)
         if m:
             length = int(m.group("length"))
             charset = m.group("charset") or "alphanumeric"
             return RandomTextToken(length=length, charset=charset)
-        
+
         # Variable set
         m = self._RE_VAR_SET.fullmatch(stripped)
         if m:
             return VariableToken(
                 name=m.group("name"), value=m.group("value"), action="set"
             )
-        
+
         # Variable get
         m = self._RE_VAR_GET.fullmatch(stripped)
         if m:
             return VariableToken(name=m.group("name"), action="get")
-        
+
         # Speed change
         m = self._RE_SPEED.fullmatch(stripped)
         if m:
             speed = float(m.group("speed"))
             variance = float(m.group("variance")) if m.group("variance") else None
             return SpeedToken(speed=speed, variance=variance)
-        
+
         # DateTime with custom format
         m = self._RE_DATETIME.fullmatch(stripped)
         if m:
             fmt = m.group("format") or "%Y-%m-%d %H:%M:%S"
             return DateTimeToken(format=fmt)
-        
+
         # Date (shorthand)
         if self._RE_DATE.fullmatch(stripped):
             return DateTimeToken(format="%Y-%m-%d")
-        
+
         # Time (shorthand)
         if self._RE_TIME.fullmatch(stripped):
             return DateTimeToken(format="%H:%M:%S")
-        
+
         # Counter
         m = self._RE_COUNTER.fullmatch(stripped)
         if m:
@@ -242,25 +247,25 @@ class CommandParser:
             action = m.group("action") or "next"
             start = int(m.group("start")) if m.group("start") else 1
             return CounterToken(name=name, action=action, start=start)
-        
+
         # Newline
         m = self._RE_NEWLINE.fullmatch(stripped)
         if m:
             count = int(m.group("count")) if m.group("count") else 1
             return NewlineToken(count=count)
-        
+
         # NL (shorthand for newline)
         m = self._RE_NL.fullmatch(stripped)
         if m:
             count = int(m.group("count")) if m.group("count") else 1
             return NewlineToken(count=count)
-        
+
         # Tab
         m = self._RE_TAB.fullmatch(stripped)
         if m:
             count = int(m.group("count")) if m.group("count") else 1
             return TabToken(count=count)
-        
+
         # Key combination
         parts = [p.strip() for p in re.split(r"\s*\+\s*", stripped)]
         keys: List[str] = []

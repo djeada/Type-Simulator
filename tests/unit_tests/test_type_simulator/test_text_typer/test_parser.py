@@ -3,7 +3,15 @@ import os
 import time
 import logging
 
-from type_simulator.text_typer.token import TextToken, WaitToken, KeyToken, RepeatToken, RandomTextToken, SpeedToken, VariableToken
+from type_simulator.text_typer.token import (
+    TextToken,
+    WaitToken,
+    KeyToken,
+    RepeatToken,
+    RandomTextToken,
+    SpeedToken,
+    VariableToken,
+)
 from type_simulator.text_typer.parser import CommandParser
 from type_simulator.text_typer.__main__ import Typist, TextTyper
 
@@ -124,7 +132,7 @@ def test_preserve_empty_lines_after_brace_and_logging(caplog):
     bad = "{INVALID\n\nSPEC}"
     tokens2 = parser_strict.parse(bad)
     # In strict mode, invalid is skipped; result is empty text token list
-    assert all(t.__class__.__name__ != 'TextToken' or t.text != bad for t in tokens2)
+    assert all(t.__class__.__name__ != "TextToken" or t.text != bad for t in tokens2)
     # Ensure the log contains the escaped \n sequences
     assert "Invalid sequence '{INVALID\\n\\nSPEC}'" in caplog.text
 
@@ -232,6 +240,7 @@ def test_parse_complex_macro():
 def test_parse_datetime_token():
     """Test parsing of DATETIME token."""
     from type_simulator.text_typer.token import DateTimeToken
+
     parser = CommandParser()
     tokens = parser.parse("{DATETIME}")
     assert len(tokens) == 1
@@ -242,6 +251,7 @@ def test_parse_datetime_token():
 def test_parse_datetime_with_format():
     """Test parsing of DATETIME token with custom format."""
     from type_simulator.text_typer.token import DateTimeToken
+
     parser = CommandParser()
     tokens = parser.parse("{DATETIME_%Y/%m/%d}")
     assert len(tokens) == 1
@@ -252,6 +262,7 @@ def test_parse_datetime_with_format():
 def test_parse_date_shorthand():
     """Test parsing of DATE shorthand."""
     from type_simulator.text_typer.token import DateTimeToken
+
     parser = CommandParser()
     tokens = parser.parse("{DATE}")
     assert len(tokens) == 1
@@ -262,6 +273,7 @@ def test_parse_date_shorthand():
 def test_parse_time_shorthand():
     """Test parsing of TIME shorthand."""
     from type_simulator.text_typer.token import DateTimeToken
+
     parser = CommandParser()
     tokens = parser.parse("{TIME}")
     assert len(tokens) == 1
@@ -272,6 +284,7 @@ def test_parse_time_shorthand():
 def test_parse_counter_token():
     """Test parsing of COUNTER token."""
     from type_simulator.text_typer.token import CounterToken
+
     parser = CommandParser()
     tokens = parser.parse("{COUNTER}")
     assert len(tokens) == 1
@@ -283,6 +296,7 @@ def test_parse_counter_token():
 def test_parse_counter_with_name():
     """Test parsing of named COUNTER token."""
     from type_simulator.text_typer.token import CounterToken
+
     parser = CommandParser()
     tokens = parser.parse("{COUNTER_mycount}")
     assert len(tokens) == 1
@@ -293,6 +307,7 @@ def test_parse_counter_with_name():
 def test_parse_loop_token():
     """Test parsing of LOOP block."""
     from type_simulator.text_typer.token import LoopToken
+
     parser = CommandParser()
     tokens = parser.parse("{LOOP_5}Item {GET_i}{/LOOP}")
     assert len(tokens) == 1
@@ -304,6 +319,7 @@ def test_parse_loop_token():
 def test_parse_loop_with_var():
     """Test parsing of LOOP block with custom variable name."""
     from type_simulator.text_typer.token import LoopToken
+
     parser = CommandParser()
     tokens = parser.parse("{LOOP_3_num}Number {GET_num}{/LOOP}")
     assert len(tokens) == 1
@@ -315,6 +331,7 @@ def test_parse_loop_with_var():
 def test_parse_newline_token():
     """Test parsing of NEWLINE token."""
     from type_simulator.text_typer.token import NewlineToken
+
     parser = CommandParser()
     tokens = parser.parse("{NEWLINE}")
     assert len(tokens) == 1
@@ -325,6 +342,7 @@ def test_parse_newline_token():
 def test_parse_newline_with_count():
     """Test parsing of NEWLINE token with count."""
     from type_simulator.text_typer.token import NewlineToken
+
     parser = CommandParser()
     tokens = parser.parse("{NEWLINE_3}")
     assert len(tokens) == 1
@@ -335,6 +353,7 @@ def test_parse_newline_with_count():
 def test_parse_nl_shorthand():
     """Test parsing of NL shorthand for newline."""
     from type_simulator.text_typer.token import NewlineToken
+
     parser = CommandParser()
     tokens = parser.parse("{NL}")
     assert len(tokens) == 1
@@ -344,6 +363,7 @@ def test_parse_nl_shorthand():
 def test_parse_tab_token():
     """Test parsing of TAB token."""
     from type_simulator.text_typer.token import TabToken
+
     parser = CommandParser()
     tokens = parser.parse("{TAB}")
     assert len(tokens) == 1
@@ -354,6 +374,7 @@ def test_parse_tab_token():
 def test_parse_tab_with_count():
     """Test parsing of TAB token with count."""
     from type_simulator.text_typer.token import TabToken
+
     parser = CommandParser()
     tokens = parser.parse("{TAB_2}")
     assert len(tokens) == 1

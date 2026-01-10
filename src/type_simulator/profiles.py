@@ -23,7 +23,7 @@ from typing import Dict, Optional
 class TypingProfile:
     """
     Configuration for a typing style.
-    
+
     Attributes:
         name: Profile identifier
         speed: Base seconds per character
@@ -129,10 +129,10 @@ PROFILES: Dict[str, TypingProfile] = {
 def get_profile(name: str) -> Optional[TypingProfile]:
     """
     Get a typing profile by name.
-    
+
     Args:
         name: Profile name (case-insensitive)
-        
+
     Returns:
         TypingProfile if found, None otherwise
     """
@@ -142,7 +142,7 @@ def get_profile(name: str) -> Optional[TypingProfile]:
 def list_profiles() -> Dict[str, TypingProfile]:
     """
     List all available typing profiles.
-    
+
     Returns:
         Dictionary of profile name to TypingProfile
     """

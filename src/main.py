@@ -25,19 +25,27 @@ def print_profiles() -> None:
     print(f"{'Profile':<15} {'Speed':>8} {'Variance':>10} {'Description':<35}")
     print("=" * 70)
     for name, profile in list_profiles().items():
-        print(f"  {name:<13} {profile.speed:>6.3f}s  ±{profile.variance:<8.3f} {profile.description}")
+        print(
+            f"  {name:<13} {profile.speed:>6.3f}s  ±{profile.variance:<8.3f} {profile.description}"
+        )
     print("=" * 70)
-    print("\n💡 Usage: python -m src.main --profile <name> --mode <mode> --input \"text\"")
-    print("   Example: python -m src.main --profile programmer --mode direct --output code.txt --input \"Hello World!\"")
+    print(
+        '\n💡 Usage: python -m src.main --profile <name> --mode <mode> --input "text"'
+    )
+    print(
+        '   Example: python -m src.main --profile programmer --mode direct --output code.txt --input "Hello World!"'
+    )
 
 
-def print_stats(text: str, start_time: float, end_time: float, profile_name: str = None) -> None:
+def print_stats(
+    text: str, start_time: float, end_time: float, profile_name: str = None
+) -> None:
     """Print detailed typing statistics."""
     duration = end_time - start_time
     char_count = len(text)
     word_count = len(text.split())
-    line_count = text.count('\n') + 1
-    
+    line_count = text.count("\n") + 1
+
     # Calculate various metrics
     if duration > 0:
         wpm = (char_count / 5) / (duration / 60)
@@ -47,40 +55,56 @@ def print_stats(text: str, start_time: float, end_time: float, profile_name: str
         wpm = 0
         cps = 0
         wps = 0
-    
+
     # Character breakdown
     alpha_count = sum(1 for c in text if c.isalpha())
     digit_count = sum(1 for c in text if c.isdigit())
-    space_count = text.count(' ')
+    space_count = text.count(" ")
     special_count = char_count - alpha_count - digit_count - space_count
 
     print("\n" + "=" * 50)
     print("📊 TYPING STATISTICS")
     print("=" * 50)
-    
+
     if profile_name:
         print(f"  🎹 Profile Used:    {profile_name}")
         print("-" * 50)
-    
+
     print("  📝 Content Summary:")
     print(f"     Characters:      {char_count:,}")
     print(f"     Words:           {word_count:,}")
     print(f"     Lines:           {line_count:,}")
     print("-" * 50)
-    
+
     print("  📈 Character Breakdown:")
-    print(f"     Letters:         {alpha_count:,} ({alpha_count/char_count*100:.1f}%)" if char_count > 0 else "     Letters:         0")
-    print(f"     Digits:          {digit_count:,} ({digit_count/char_count*100:.1f}%)" if char_count > 0 else "     Digits:          0")
-    print(f"     Spaces:          {space_count:,} ({space_count/char_count*100:.1f}%)" if char_count > 0 else "     Spaces:          0")
-    print(f"     Special:         {special_count:,} ({special_count/char_count*100:.1f}%)" if char_count > 0 else "     Special:         0")
+    print(
+        f"     Letters:         {alpha_count:,} ({alpha_count/char_count*100:.1f}%)"
+        if char_count > 0
+        else "     Letters:         0"
+    )
+    print(
+        f"     Digits:          {digit_count:,} ({digit_count/char_count*100:.1f}%)"
+        if char_count > 0
+        else "     Digits:          0"
+    )
+    print(
+        f"     Spaces:          {space_count:,} ({space_count/char_count*100:.1f}%)"
+        if char_count > 0
+        else "     Spaces:          0"
+    )
+    print(
+        f"     Special:         {special_count:,} ({special_count/char_count*100:.1f}%)"
+        if char_count > 0
+        else "     Special:         0"
+    )
     print("-" * 50)
-    
+
     print("  ⏱️  Performance:")
     print(f"     Time Elapsed:    {duration:.2f}s")
     print(f"     Speed (CPS):     {cps:.1f} chars/sec")
     print(f"     Speed (WPM):     {wpm:.1f} words/min")
     print("=" * 50)
-    
+
     # Fun comparison
     if wpm > 0:
         if wpm > 200:
@@ -124,7 +148,9 @@ def main() -> None:
         if profile:
             typing_speed = profile.speed
             typing_variance = profile.variance
-            logging.info(f"Using profile '{args.profile}': speed={typing_speed}, variance={typing_variance}")
+            logging.info(
+                f"Using profile '{args.profile}': speed={typing_speed}, variance={typing_variance}"
+            )
 
     # Override with explicit speed/variance if provided
     if args.speed is not None:

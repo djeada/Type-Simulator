@@ -25,11 +25,13 @@ if TYPE_CHECKING:
 def _get_pyautogui():
     """Lazily import pyautogui only when needed for GUI operations."""
     import pyautogui
+
     return pyautogui
 
 
 class Mode(Enum):
     """Typing mode enumeration."""
+
     GUI = "gui"
     TERMINAL = "terminal"
     DIRECT = "direct"
@@ -112,7 +114,9 @@ class TypeSimulator:
         self.text = text
         # Use lazy initialization for direct mode (no GUI needed)
         lazy_init = self.mode == Mode.DIRECT
-        self.texter = TextTyper(text, typing_speed, typing_variance, lazy_init=lazy_init)
+        self.texter = TextTyper(
+            text, typing_speed, typing_variance, lazy_init=lazy_init
+        )
         self.pre_launch_cmd = pre_launch_cmd
         if self.mode in (Mode.GUI, Mode.TERMINAL):
             # Always honor explicit editor_cmd if provided
