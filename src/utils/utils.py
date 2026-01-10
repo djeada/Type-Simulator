@@ -9,6 +9,28 @@ def is_program_installed(program):
     return result.returncode == 0
 
 
+# Terminal emulators with their metadata
+# Format: (executable, command_template, description, install_hint)
+LINUX_TERMINALS = [
+    ("gnome-terminal", "gnome-terminal -- bash", "GNOME Terminal (default for GNOME/Linux Mint)", 
+     "sudo apt install gnome-terminal"),
+    ("konsole", "konsole -e bash", "Konsole (default for KDE)", 
+     "sudo apt install konsole"),
+    ("xfce4-terminal", "xfce4-terminal -e bash", "XFCE Terminal (default for XFCE)", 
+     "sudo apt install xfce4-terminal"),
+    ("mate-terminal", "mate-terminal -e bash", "MATE Terminal (default for MATE)", 
+     "sudo apt install mate-terminal"),
+    ("tilix", "tilix -e bash", "Tilix (tiling terminal)", 
+     "sudo apt install tilix"),
+    ("kitty", "kitty bash", "Kitty (GPU-accelerated terminal)", 
+     "sudo apt install kitty"),
+    ("alacritty", "alacritty -e bash", "Alacritty (GPU-accelerated terminal)", 
+     "sudo apt install alacritty"),
+    ("xterm", "xterm -e bash", "XTerm (classic X11 terminal)", 
+     "sudo apt install xterm"),
+]
+
+
 def get_default_terminal_command():
     """
     Detect and return a command to open a terminal emulator.
@@ -30,28 +52,7 @@ def get_default_terminal_command():
         return ("open -a Terminal", None)
     
     elif system == "Linux":
-        # Linux: Try common terminal emulators in order of preference
-        # Format: (executable, command_template)
-        # command_template uses {cmd} as placeholder for the shell command
-        terminals = [
-            # GNOME/Linux Mint default
-            ("gnome-terminal", "gnome-terminal -- bash"),
-            # KDE
-            ("konsole", "konsole -e bash"),
-            # XFCE
-            ("xfce4-terminal", "xfce4-terminal -e bash"),
-            # MATE
-            ("mate-terminal", "mate-terminal -e bash"),
-            # Tilix
-            ("tilix", "tilix -e bash"),
-            # Modern terminals
-            ("kitty", "kitty bash"),
-            ("alacritty", "alacritty -e bash"),
-            # Classic fallback
-            ("xterm", "xterm -e bash"),
-        ]
-        
-        for executable, cmd_template in terminals:
+        for executable, cmd_template, _, _ in LINUX_TERMINALS:
             if shutil.which(executable):
                 return (cmd_template, None)
         
@@ -74,6 +75,113 @@ def get_default_terminal_command():
             f"Unsupported platform: {system}. "
             "Please specify a terminal command with --editor-script."
         )
+
+
+def check_terminal_availability():
+    """
+    Check and display terminal emulator availability on the system.
+    
+    Iterates through all supported terminals and displays:
+    - Which terminals are available
+    - Which are not installed and how to install them
+    - Platform-specific information
+    
+    Returns a tuple of (available_terminals, unavailable_terminals)
+    where each is a list of tuples (name, details).
+    """
+    system = platform.system()
+    available = []
+    unavailable = []
+    
+    print("\n🖥️  Terminal Emulator Availability Check")
+    print("=" * 60)
+    print(f"  Platform: {system}")
+    print("=" * 60)
+    
+    if system == "Darwin":
+        # macOS always has Terminal.app
+        print("\n✅ macOS detected - Terminal.app is built-in")
+        print("   Command: open -a Terminal")
+        print("\n   Other options:")
+        # Check for iTerm2
+        if shutil.which("iTerm"):
+            print("   ✅ iTerm2 is installed")
+            available.append(("iTerm2", "Available"))
+        else:
+            print("   ℹ️  iTerm2 not installed (optional)")
+            print("      Install: brew install --cask iterm2")
+            unavailable.append(("iTerm2", "Not installed (optional)"))
+        available.append(("Terminal.app", "Built-in"))
+        
+    elif system == "Linux":
+        print("\n📋 Checking Linux terminal emulators:\n")
+        
+        for executable, cmd_template, description, install_hint in LINUX_TERMINALS:
+            path = shutil.which(executable)
+            if path:
+                print(f"   ✅ {executable}")
+                print(f"      Path: {path}")
+                print(f"      Description: {description}")
+                print(f"      Command: {cmd_template}")
+                available.append((executable, path))
+            else:
+                print(f"   ❌ {executable}")
+                print(f"      Description: {description}")
+                print(f"      Not installed - Install with: {install_hint}")
+                unavailable.append((executable, install_hint))
+            print()
+        
+    elif system == "Windows":
+        print("\n✅ Windows detected - cmd.exe is built-in")
+        print("   Command: cmd.exe /k")
+        available.append(("cmd.exe", "Built-in"))
+        
+        # Check for Windows Terminal
+        wt_path = shutil.which("wt")
+        if wt_path:
+            print("\n   ✅ Windows Terminal is installed")
+            print(f"      Path: {wt_path}")
+            available.append(("Windows Terminal", wt_path))
+        else:
+            print("\n   ℹ️  Windows Terminal not installed (optional)")
+            print("      Install from Microsoft Store or: winget install Microsoft.WindowsTerminal")
+            unavailable.append(("Windows Terminal", "Not installed (optional)"))
+            
+        # Check for PowerShell
+        ps_path = shutil.which("pwsh")
+        if ps_path:
+            print("\n   ✅ PowerShell Core is installed")
+            print(f"      Path: {ps_path}")
+            available.append(("PowerShell Core", ps_path))
+        else:
+            print("\n   ℹ️  PowerShell Core not installed (optional)")
+            print("      Install: winget install Microsoft.PowerShell")
+            unavailable.append(("PowerShell Core", "Not installed (optional)"))
+    else:
+        print(f"\n⚠️  Unsupported platform: {system}")
+        print("   Terminal mode may not work on this platform.")
+        print("   You can specify a custom terminal with --editor-script.")
+    
+    # Summary
+    print("\n" + "=" * 60)
+    print("📊 Summary")
+    print("=" * 60)
+    if available:
+        print(f"   ✅ Available terminals: {len(available)}")
+        default_cmd, _ = get_default_terminal_command()
+        if default_cmd:
+            print(f"   🎯 Default command: {default_cmd}")
+    else:
+        print("   ❌ No terminal emulators found!")
+        print("   Please install one of the supported terminals.")
+    
+    if unavailable and system == "Linux":
+        print(f"\n   ℹ️  {len(unavailable)} terminals not installed")
+        print("   Run with --log-level DEBUG for installation commands")
+    
+    print()
+    
+    return available, unavailable
 
 
 def get_focus_mode_dependency(platform_name):

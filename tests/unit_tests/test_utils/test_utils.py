@@ -1,6 +1,8 @@
 import pytest
-from utils.utils import is_program_installed, install_instructions, get_default_terminal_command
+from utils.utils import is_program_installed, install_instructions, get_default_terminal_command, check_terminal_availability
 from unittest.mock import patch
+import io
+import sys
 
 
 def test_is_program_installed_true():
@@ -94,3 +96,74 @@ def test_get_default_terminal_command_unsupported():
         cmd, error = get_default_terminal_command()
         assert cmd is None
         assert "Unsupported platform" in error
+
+
+def test_check_terminal_availability_linux_with_gnome():
+    """Test check_terminal_availability on Linux with gnome-terminal."""
+    with patch("utils.utils.platform.system", return_value="Linux"):
+        with patch("utils.utils.shutil.which") as mock_which:
+            mock_which.side_effect = lambda x: "/usr/bin/gnome-terminal" if x == "gnome-terminal" else None
+            # Capture stdout
+            captured = io.StringIO()
+            sys.stdout = captured
+            try:
+                available, unavailable = check_terminal_availability()
+            finally:
+                sys.stdout = sys.__stdout__
+            
+            output = captured.getvalue()
+            assert "gnome-terminal" in output
+            assert "✅" in output
+            assert len(available) == 1
+            assert available[0][0] == "gnome-terminal"
+
+
+def test_check_terminal_availability_linux_no_terminals():
+    """Test check_terminal_availability on Linux with no terminals."""
+    with patch("utils.utils.platform.system", return_value="Linux"):
+        with patch("utils.utils.shutil.which", return_value=None):
+            captured = io.StringIO()
+            sys.stdout = captured
+            try:
+                available, unavailable = check_terminal_availability()
+            finally:
+                sys.stdout = sys.__stdout__
+            
+            output = captured.getvalue()
+            assert "No terminal emulators found" in output
+            assert len(available) == 0
+            assert len(unavailable) == 8  # All 8 Linux terminals
+
+
+def test_check_terminal_availability_macos():
+    """Test check_terminal_availability on macOS."""
+    with patch("utils.utils.platform.system", return_value="Darwin"):
+        with patch("utils.utils.shutil.which", return_value=None):  # No iTerm
+            captured = io.StringIO()
+            sys.stdout = captured
+            try:
+                available, unavailable = check_terminal_availability()
+            finally:
+                sys.stdout = sys.__stdout__
+            
+            output = captured.getvalue()
+            assert "macOS detected" in output
+            assert "Terminal.app is built-in" in output
+            assert ("Terminal.app", "Built-in") in available
+
+
+def test_check_terminal_availability_windows():
+    """Test check_terminal_availability on Windows."""
+    with patch("utils.utils.platform.system", return_value="Windows"):
+        with patch("utils.utils.shutil.which", return_value=None):  # No WT or pwsh
+            captured = io.StringIO()
+            sys.stdout = captured
+            try:
+                available, unavailable = check_terminal_availability()
+            finally:
+                sys.stdout = sys.__stdout__
+            
+            output = captured.getvalue()
+            assert "Windows detected" in output
+            assert "cmd.exe is built-in" in output
+            assert ("cmd.exe", "Built-in") in available

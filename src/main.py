@@ -137,6 +137,12 @@ def main() -> None:
         print_profiles()
         sys.exit(0)
 
+    # Handle --check-terminals
+    if args.check_terminals:
+        from utils.utils import check_terminal_availability
+        check_terminal_availability()
+        sys.exit(0)
+
     # Handle profile settings
     typing_speed = 0.15  # default
     typing_variance = 0.05  # default
