@@ -102,9 +102,9 @@ class TypeSimulator:
             except Exception as e:
                 self.logger.debug(f"Error processing text input: {e}")
 
-        # Detect focus mode: if file_path is None, switch to FOCUS
-        if not file_path:
-            self.mode = Mode.FOCUS
+        # Respect the requested mode; only infer focus when mode is unset.
+        if mode is None:
+            self.mode = Mode.FOCUS if not file_path else Mode.GUI
         else:
             self.mode = Mode(mode) if isinstance(mode, str) else mode
         self.wait = wait
@@ -174,8 +174,11 @@ class TypeSimulator:
         )
 
     def _launch_editor(self) -> subprocess.Popen:
-        path = self.file_manager.file_path
-        self.logger.debug("Launching editor for file: %s", path)
+        path = self.file_manager.file_path if self.file_manager else None
+        if path:
+            self.logger.debug("Launching editor for file: %s", path)
+        else:
+            self.logger.debug("Launching editor without a file target")
         proc = self.editor_manager.open_editor(path)
         self.logger.debug("Editor launched, PID=%s", proc.pid)
         return proc

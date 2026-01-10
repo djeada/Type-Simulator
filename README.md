@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.7%2B-blue)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-2.1.0-green)](https://github.com/djeada/Type-Simulator)
+[![Version](https://img.shields.io/badge/version-2.1.1-green)](https://github.com/djeada/Type-Simulator)
 
 **Type-Simulator** is a versatile Python tool for automating human-like typing in any text editor or input field. Whether you're creating demos, running automated tutorials, or stress-testing text-based applications, Type-Simulator lets you control keyboard inputs with precision and randomness for a natural effect.
 

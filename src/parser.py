@@ -9,7 +9,7 @@ that exits before any GUI imports are performed.
 import argparse
 
 # bump this on every release
-VERSION = "2.1.0"
+VERSION = "2.1.1"
 
 # Available typing profiles
 TYPING_PROFILES = [
