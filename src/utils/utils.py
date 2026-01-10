@@ -19,7 +19,8 @@ def get_default_terminal_command():
     Supports:
     - Linux: gnome-terminal, konsole, xfce4-terminal, mate-terminal, 
              tilix, kitty, alacritty, xterm
-    - macOS: Terminal.app (via osascript)
+    - macOS: Terminal.app (via 'open -a Terminal')
+    - Windows: cmd.exe
     """
     system = platform.system()
     
