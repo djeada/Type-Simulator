@@ -61,6 +61,7 @@ class TypeSimulator:
         typing_variance: float = 0.05,
         wait: float = 0.0,
         pre_launch_cmd: Optional[str] = None,
+        geometry: Optional[str] = None,
         **kwargs,
     ):
         file_path = None
@@ -88,11 +89,12 @@ class TypeSimulator:
         # Setup logging
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.debug(
-            "Initialized with file_path=%s, mode=%s, wait=%s, editor_cmd=%s",
+            "Initialized with file_path=%s, mode=%s, wait=%s, editor_cmd=%s, geometry=%s",
             file_path,
             mode,
             wait,
             editor_cmd,
+            geometry,
         )
 
         # Convert text input from any source
@@ -126,7 +128,7 @@ class TypeSimulator:
                 else:
                     # Terminal mode: detect available terminal emulator
                     from utils.utils import get_default_terminal_command
-                    cmd, error = get_default_terminal_command()
+                    cmd, error = get_default_terminal_command(geometry=geometry)
                     if cmd is None:
                         raise RuntimeError(error)
             self.editor_manager = EditorManager(cmd)

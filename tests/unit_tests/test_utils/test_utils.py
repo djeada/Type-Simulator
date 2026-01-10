@@ -167,3 +167,75 @@ def test_check_terminal_availability_windows():
             assert "Windows detected" in output
             assert "cmd.exe is built-in" in output
             assert ("cmd.exe", "Built-in") in available
+
+
+def test_get_default_terminal_command_with_geometry_gnome():
+    """Test that geometry is applied to gnome-terminal on Linux."""
+    with patch("platform.system", return_value="Linux"):
+        with patch("shutil.which") as mock_which:
+            mock_which.side_effect = lambda x: "/usr/bin/gnome-terminal" if x == "gnome-terminal" else None
+            cmd, error = get_default_terminal_command(geometry="80x24")
+            assert cmd == "gnome-terminal --geometry=80x24 -- bash"
+            assert error is None
+
+
+def test_get_default_terminal_command_with_geometry_xterm():
+    """Test that geometry is applied to xterm on Linux."""
+    with patch("platform.system", return_value="Linux"):
+        with patch("shutil.which") as mock_which:
+            def which_side_effect(x):
+                if x == "xterm":
+                    return "/usr/bin/xterm"
+                return None
+            mock_which.side_effect = which_side_effect
+            cmd, error = get_default_terminal_command(geometry="100x40")
+            assert cmd == "xterm -geometry 100x40 -e bash"
+            assert error is None
+
+
+def test_get_default_terminal_command_with_geometry_xfce4():
+    """Test that geometry is applied to xfce4-terminal on Linux."""
+    with patch("platform.system", return_value="Linux"):
+        with patch("shutil.which") as mock_which:
+            def which_side_effect(x):
+                if x == "xfce4-terminal":
+                    return "/usr/bin/xfce4-terminal"
+                return None
+            mock_which.side_effect = which_side_effect
+            cmd, error = get_default_terminal_command(geometry="120x30")
+            assert cmd == "xfce4-terminal --geometry=120x30 -e bash"
+            assert error is None
+
+
+def test_get_default_terminal_command_geometry_not_used_on_macos():
+    """Test that geometry parameter is ignored on macOS."""
+    with patch("platform.system", return_value="Darwin"):
+        cmd, error = get_default_terminal_command(geometry="80x24")
+        # macOS doesn't support geometry in Terminal.app command
+        assert cmd == "open -a Terminal"
+        assert error is None
+
+
+def test_get_default_terminal_command_geometry_not_used_on_windows():
+    """Test that geometry parameter is ignored on Windows."""
+    with patch("platform.system", return_value="Windows"):
+        cmd, error = get_default_terminal_command(geometry="80x24")
+        # Windows cmd.exe doesn't support geometry via command line
+        assert cmd == "cmd.exe /k"
+        assert error is None
+
+
+def test_get_default_terminal_command_without_geometry():
+    """Test that terminals without geometry support fall back to default command."""
+    with patch("platform.system", return_value="Linux"):
+        with patch("shutil.which") as mock_which:
+            def which_side_effect(x):
+                # konsole doesn't have geometry in our template
+                if x == "konsole":
+                    return "/usr/bin/konsole"
+                return None
+            mock_which.side_effect = which_side_effect
+            cmd, error = get_default_terminal_command(geometry="80x24")
+            # konsole's geometry template doesn't have {geometry} placeholder
+            assert cmd == "konsole -e bash"
+            assert error is None
