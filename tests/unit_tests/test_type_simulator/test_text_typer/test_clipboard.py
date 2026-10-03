@@ -1,3 +1,4 @@
+import types
 import pytest
 import sys
 from unittest import mock
@@ -50,7 +51,10 @@ def test_tk_clipboard_copy_paste(monkeypatch):
         def clipboard_get(self):
             return self._val
 
-    monkeypatch.setattr("tkinter.Tk", DummyTk)
+    # Use a stub module so the test runs even where tkinter isn't installed
+    fake_tk = types.ModuleType("tkinter")
+    fake_tk.Tk = DummyTk
+    monkeypatch.setitem(sys.modules, "tkinter", fake_tk)
     import importlib
 
     importlib.reload(sys.modules["type_simulator.text_typer.clipboard"])

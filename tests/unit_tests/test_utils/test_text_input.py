@@ -203,3 +203,10 @@ def test_cli_input_flag(tmp_path):
         text=True,
     )
     assert result3.returncode == 0
+
+
+def test_get_text_content_ignores_stdin_when_disabled(monkeypatch):
+    fake_stdin = io.StringIO("from stdin")
+    monkeypatch.setattr(sys, "stdin", fake_stdin)
+    monkeypatch.setattr(fake_stdin, "isatty", lambda: False)
+    assert get_text_content("explicit", use_stdin=False) == "explicit"

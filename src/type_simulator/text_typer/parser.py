@@ -64,9 +64,8 @@ class CommandParser:
     _RE_DATETIME = re.compile(r"DATETIME(?:_(?P<format>.+))?$")
     _RE_DATE = re.compile(r"DATE$")
     _RE_TIME = re.compile(r"TIME$")
-    _RE_COUNTER = re.compile(
-        r"COUNTER(?:_(?P<name>\w+))?(?:_(?P<action>init|next|get))?(?:_(?P<start>\d+))?$"
-    )
+    _RE_COUNTER = re.compile(r"COUNTER(?:_(?P<rest>\w+))?$")
+    _COUNTER_ACTIONS = ("init", "next", "get")
     _RE_NEWLINE = re.compile(r"NEWLINE(?:_(?P<count>\d+))?$")
     _RE_TAB = re.compile(r"TAB(?:_(?P<count>\d+))?$")
     _RE_NL = re.compile(r"NL(?:_(?P<count>\d+))?$")
@@ -122,6 +121,8 @@ class CommandParser:
                         repeat_tokens = tokens[start_idx:]
                         tokens = tokens[:start_idx]
                         tokens.append(RepeatToken(count, repeat_tokens))
+                    else:
+                        self._report("Unmatched '{/REPEAT}' ignored")
                     idx = end_idx + 1
                     continue
 
@@ -142,6 +143,8 @@ class CommandParser:
                         loop_tokens = tokens[start_idx:]
                         tokens = tokens[:start_idx]
                         tokens.append(LoopToken(count, loop_tokens, var_name))
+                    else:
+                        self._report("Unmatched '{/LOOP}' ignored")
                     idx = end_idx + 1
                     continue
 
@@ -175,7 +178,18 @@ class CommandParser:
             idx += 1
 
         flush_buffer()
+        for kind, *_ in block_stack:
+            self._report(
+                f"Unclosed '{{{kind.upper()}_...}}' block; its contents are typed once"
+            )
         return self._merge_text_tokens(tokens)
+
+    def _report(self, msg: str) -> None:
+        """Log a structural problem: a warning in strict mode, debug otherwise."""
+        if self.strict:
+            logger.warning(msg)
+        else:
+            logger.debug(msg)
 
     def _parse_spec(self, spec: str) -> Optional[Token]:
         """Parse a single spec string and return the corresponding token."""
@@ -198,7 +212,7 @@ class CommandParser:
         # Mouse click
         m = self._RE_MOUSE_CLICK.fullmatch(stripped)
         if m:
-            return MouseClickToken(btn=m.group("btn").lower())
+            return MouseClickToken(button=m.group("btn").lower())
 
         # Random text generation
         m = self._RE_RANDOM.fullmatch(stripped)
@@ -243,10 +257,7 @@ class CommandParser:
         # Counter
         m = self._RE_COUNTER.fullmatch(stripped)
         if m:
-            name = m.group("name") or "default"
-            action = m.group("action") or "next"
-            start = int(m.group("start")) if m.group("start") else 1
-            return CounterToken(name=name, action=action, start=start)
+            return self._parse_counter(m.group("rest"))
 
         # Newline
         m = self._RE_NEWLINE.fullmatch(stripped)
@@ -280,6 +291,24 @@ class CommandParser:
             else:
                 return None
         return KeyToken(keys) if keys else None
+
+    @classmethod
+    def _parse_counter(cls, rest: Optional[str]) -> CounterToken:
+        """
+        Parse the suffix of {COUNTER[_name][_action][_start]}.
+
+        The name may itself contain underscores, so the optional start value
+        and action are peeled off the end before the remainder becomes the name.
+        """
+        parts = rest.split("_") if rest else []
+        start = 1
+        action = "next"
+        if parts and parts[-1].isdigit():
+            start = int(parts.pop())
+        if parts and parts[-1] in cls._COUNTER_ACTIONS:
+            action = parts.pop()
+        name = "_".join(parts) or "default"
+        return CounterToken(name=name, action=action, start=start)
 
     @staticmethod
     def _merge_text_tokens(tokens: List[Token]) -> List[Token]:

@@ -47,7 +47,7 @@
     "text": "A{INVALID_KEY}B",
     "is_valid": true,
     "errors": [],
-    "warnings": ["Skipping invalid sequence"]
+    "warnings": ["Invalid sequence"]
   },
   {
     "name": "success",

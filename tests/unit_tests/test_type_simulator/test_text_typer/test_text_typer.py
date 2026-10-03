@@ -106,3 +106,37 @@ def test_text_typer_escape_and_wait(caplog):
         )
     )
     assert duration >= 0.01
+
+
+def test_render_expands_counter_init():
+    typer = TextTyper(
+        "{COUNTER_x_init_5}{COUNTER_x} {COUNTER_x} {COUNTER_x_get}", lazy_init=True
+    )
+    assert typer.render() == "5 6 6"
+
+
+def test_render_does_not_touch_gui_backend():
+    typer = TextTyper("a{NL}b", lazy_init=True)
+    assert typer.render() == "a\nb"
+    assert typer._typist._initialized is False
+
+
+def test_profile_pause_triggers_between_words(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(time, "sleep", lambda s: sleeps.append(s))
+    backend = DummyBackend()
+    typist = Typist(0, 0, backend=backend, pause_probability=1.0, pause_duration=0.2)
+    typist.execute([TextToken("a b c")])
+    pauses = [s for s in sleeps if s > 0]
+    assert len(pauses) == 2
+    assert all(0.1 <= s <= 0.3 for s in pauses)
+
+
+def test_strict_typist_propagates_errors():
+    class Boom(TextToken):
+        def execute(self, executor):
+            raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError):
+        Typist(backend=DummyBackend(), strict=True).execute([Boom("x")])
+    Typist(backend=DummyBackend(), strict=False).execute([Boom("x")])

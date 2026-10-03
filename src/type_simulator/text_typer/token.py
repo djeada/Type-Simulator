@@ -7,13 +7,16 @@ import string
 import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from type_simulator.text_typer.__main__ import Typist
 
 # Configure logger
 logger = logging.getLogger(__name__)
 
 # Problematic characters requiring clipboard or unicode input
-PROBLEMATIC_CHARS = set(str("<>:?|@#{}:;*[]()!$&'^,~`\\"))  # expanded set as needed
+PROBLEMATIC_CHARS = set("<>:?|@#{};*[]()!$&'^,~`\\")
 
 # Paste strategies ordered by preference
 PASTE_STRATEGIES: List[Tuple[str, Tuple[str, ...]]] = [
@@ -67,6 +70,9 @@ class TextToken(Token):
     text: str
 
     def execute(self, executor: "Typist") -> None:
+        if getattr(executor, "render_only", False):
+            executor.backend.write(self.text)
+            return
         for ch in self.text:
             interval = max(
                 0.0,
@@ -85,6 +91,8 @@ class TextToken(Token):
             else:
                 logger.debug("Typing '%s' via write", ch)
                 executor.backend.write(ch, interval=interval)
+            if ch == " " and hasattr(executor, "maybe_pause"):
+                executor.maybe_pause()
 
     @staticmethod
     def _paste_character(ch: str, executor: "Typist") -> bool:
@@ -128,6 +136,8 @@ class WaitToken(Token):
     seconds: float
 
     def execute(self, executor: "Typist") -> None:
+        if getattr(executor, "render_only", False):
+            return
         logger.debug("Waiting for %s seconds", self.seconds)
         time.sleep(self.seconds)
 
@@ -280,13 +290,18 @@ class CounterToken(Token):
     def execute(self, executor: "Typist") -> None:
         if not hasattr(executor, "_counters"):
             executor._counters = {}
+        if not hasattr(executor, "_counter_starts"):
+            executor._counter_starts = {}
+        start = executor._counter_starts.get(self.name, self.start)
 
         if self.action == "init":
-            executor._counters[self.name] = self.start
-            logger.debug("Initialized counter %s = %d", self.name, self.start)
+            # Reset so the next {COUNTER_name} types exactly `start`
+            executor._counters.pop(self.name, None)
+            executor._counter_starts[self.name] = self.start
+            logger.debug("Initialized counter %s to start at %d", self.name, self.start)
         elif self.action == "next":
             if self.name not in executor._counters:
-                executor._counters[self.name] = self.start
+                executor._counters[self.name] = start
             else:
                 executor._counters[self.name] += self.step
             val = executor._counters[self.name]
@@ -294,7 +309,7 @@ class CounterToken(Token):
             logger.debug("Counter %s = %s", self.name, text)
             TextToken(text).execute(executor)
         else:  # get
-            val = executor._counters.get(self.name, self.start)
+            val = executor._counters.get(self.name, start)
             text = str(val).zfill(self.pad) if self.pad > 0 else str(val)
             logger.debug("Get counter %s = %s", self.name, text)
             TextToken(text).execute(executor)
@@ -330,12 +345,10 @@ class NewlineToken(Token):
 
     def execute(self, executor: "Typist") -> None:
         logger.debug("Inserting %d newline(s)", self.count)
-        # Ensure backend is initialized
-        if not executor._initialized:
-            executor._init_backend()
         for _ in range(self.count):
             executor.backend.press("enter")
-            time.sleep(executor.typing_speed)
+            if not getattr(executor, "render_only", False):
+                time.sleep(executor.typing_speed)
 
 
 @dataclass
@@ -346,9 +359,7 @@ class TabToken(Token):
 
     def execute(self, executor: "Typist") -> None:
         logger.debug("Inserting %d tab(s)", self.count)
-        # Ensure backend is initialized
-        if not executor._initialized:
-            executor._init_backend()
         for _ in range(self.count):
             executor.backend.press("tab")
-            time.sleep(executor.typing_speed)
+            if not getattr(executor, "render_only", False):
+                time.sleep(executor.typing_speed)

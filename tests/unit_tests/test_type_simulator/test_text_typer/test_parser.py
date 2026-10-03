@@ -15,7 +15,6 @@ from type_simulator.text_typer.token import (
 from type_simulator.text_typer.parser import CommandParser
 from type_simulator.text_typer.__main__ import Typist, TextTyper
 
-
 # Parser tests
 
 
@@ -380,3 +379,30 @@ def test_parse_tab_with_count():
     assert len(tokens) == 1
     assert isinstance(tokens[0], TabToken)
     assert tokens[0].count == 2
+
+
+@pytest.mark.parametrize(
+    "spec, name, action, start",
+    [
+        ("{COUNTER}", "default", "next", 1),
+        ("{COUNTER_items}", "items", "next", 1),
+        ("{COUNTER_my_list}", "my_list", "next", 1),
+        ("{COUNTER_init}", "default", "init", 1),
+        ("{COUNTER_x_next}", "x", "next", 1),
+        ("{COUNTER_x_get}", "x", "get", 1),
+        ("{COUNTER_x_init_5}", "x", "init", 5),
+        ("{COUNTER_5}", "default", "next", 5),
+    ],
+)
+def test_parse_counter_variants(spec, name, action, start):
+    from type_simulator.text_typer.token import CounterToken
+
+    (tok,) = CommandParser().parse(spec)
+    assert tok == CounterToken(name=name, action=action, start=start)
+
+
+def test_strict_warns_on_unbalanced_blocks(caplog):
+    caplog.set_level(logging.WARNING)
+    CommandParser(strict=True).parse("{REPEAT_2}a{/LOOP}")
+    assert "Unmatched '{/LOOP}'" in caplog.text
+    assert "Unclosed '{REPEAT_...}'" in caplog.text
