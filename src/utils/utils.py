@@ -13,98 +13,138 @@ def is_program_installed(program):
 # Format: (executable, command_template, description, install_hint, geometry_format)
 # geometry_format: how to specify geometry (None if not supported, format string with {geometry} placeholder)
 LINUX_TERMINALS = [
-    ("gnome-terminal", "gnome-terminal -- bash", "GNOME Terminal (default for GNOME/Linux Mint)", 
-     "sudo apt install gnome-terminal", "gnome-terminal --geometry={geometry} -- bash"),
-    ("konsole", "konsole -e bash", "Konsole (default for KDE)", 
-     "sudo apt install konsole", "konsole -e bash"),
-    ("xfce4-terminal", "xfce4-terminal -e bash", "XFCE Terminal (default for XFCE)", 
-     "sudo apt install xfce4-terminal", "xfce4-terminal --geometry={geometry} -e bash"),
-    ("mate-terminal", "mate-terminal -e bash", "MATE Terminal (default for MATE)", 
-     "sudo apt install mate-terminal", "mate-terminal --geometry={geometry} -e bash"),
-    ("tilix", "tilix -e bash", "Tilix (tiling terminal)", 
-     "sudo apt install tilix", "tilix -e bash"),
-    ("kitty", "kitty bash", "Kitty (GPU-accelerated terminal)", 
-     "sudo apt install kitty", "kitty bash"),
-    ("alacritty", "alacritty -e bash", "Alacritty (GPU-accelerated terminal)", 
-     "sudo apt install alacritty", "alacritty -e bash"),
-    ("xterm", "xterm -e bash", "XTerm (classic X11 terminal)", 
-     "sudo apt install xterm", "xterm -geometry {geometry} -e bash"),
+    (
+        "gnome-terminal",
+        "gnome-terminal -- bash",
+        "GNOME Terminal (default for GNOME/Linux Mint)",
+        "sudo apt install gnome-terminal",
+        "gnome-terminal --geometry={geometry} -- bash",
+    ),
+    (
+        "konsole",
+        "konsole -e bash",
+        "Konsole (default for KDE)",
+        "sudo apt install konsole",
+        "konsole -e bash",
+    ),
+    (
+        "xfce4-terminal",
+        "xfce4-terminal -e bash",
+        "XFCE Terminal (default for XFCE)",
+        "sudo apt install xfce4-terminal",
+        "xfce4-terminal --geometry={geometry} -e bash",
+    ),
+    (
+        "mate-terminal",
+        "mate-terminal -e bash",
+        "MATE Terminal (default for MATE)",
+        "sudo apt install mate-terminal",
+        "mate-terminal --geometry={geometry} -e bash",
+    ),
+    (
+        "tilix",
+        "tilix -e bash",
+        "Tilix (tiling terminal)",
+        "sudo apt install tilix",
+        "tilix -e bash",
+    ),
+    (
+        "kitty",
+        "kitty bash",
+        "Kitty (GPU-accelerated terminal)",
+        "sudo apt install kitty",
+        "kitty bash",
+    ),
+    (
+        "alacritty",
+        "alacritty -e bash",
+        "Alacritty (GPU-accelerated terminal)",
+        "sudo apt install alacritty",
+        "alacritty -e bash",
+    ),
+    (
+        "xterm",
+        "xterm -e bash",
+        "XTerm (classic X11 terminal)",
+        "sudo apt install xterm",
+        "xterm -geometry {geometry} -e bash",
+    ),
 ]
 
 
 def get_default_terminal_command(geometry=None):
     """
     Detect and return a command to open a terminal emulator.
-    
+
     Args:
         geometry: Optional terminal geometry string (e.g., '80x24').
                   Only used in terminal mode on Linux for supported terminals.
-    
+
     Returns a tuple of (command_string, None) on success,
     or (None, error_message) if no terminal is found.
-    
+
     Supports:
-    - Linux: gnome-terminal, konsole, xfce4-terminal, mate-terminal, 
+    - Linux: gnome-terminal, konsole, xfce4-terminal, mate-terminal,
              tilix, kitty, alacritty, xterm
     - macOS: Terminal.app (via 'open -a Terminal')
     - Windows: cmd.exe
     """
     system = platform.system()
-    
+
     if system == "Darwin":
         # macOS: Use 'open -a Terminal' to open Terminal.app
         # This creates a new terminal window and returns immediately
         return ("open -a Terminal", None)
-    
+
     elif system == "Linux":
         for executable, cmd_template, _, _, geometry_template in LINUX_TERMINALS:
             if shutil.which(executable):
                 if geometry and geometry_template and "{geometry}" in geometry_template:
                     return (geometry_template.format(geometry=geometry), None)
                 return (cmd_template, None)
-        
+
         # No terminal found
         return (
             None,
             "No terminal emulator found. Please install one of: "
             "gnome-terminal, konsole, xfce4-terminal, mate-terminal, "
             "tilix, kitty, alacritty, or xterm. "
-            "Alternatively, specify a terminal with --editor-script."
+            "Alternatively, specify a terminal with --editor-script.",
         )
-    
+
     elif system == "Windows":
         # Windows: Use cmd.exe
         return ("cmd.exe /k", None)
-    
+
     else:
         return (
             None,
             f"Unsupported platform: {system}. "
-            "Please specify a terminal command with --editor-script."
+            "Please specify a terminal command with --editor-script.",
         )
 
 
 def check_terminal_availability():
     """
     Check and display terminal emulator availability on the system.
-    
+
     Iterates through all supported terminals and displays:
     - Which terminals are available
     - Which are not installed and how to install them
     - Platform-specific information
-    
+
     Returns a tuple of (available_terminals, unavailable_terminals)
     where each is a list of tuples (name, details).
     """
     system = platform.system()
     available = []
     unavailable = []
-    
+
     print("\n🖥️  Terminal Emulator Availability Check")
     print("=" * 60)
     print(f"  Platform: {system}")
     print("=" * 60)
-    
+
     if system == "Darwin":
         # macOS always has Terminal.app
         print("\n✅ macOS detected - Terminal.app is built-in")
@@ -119,10 +159,10 @@ def check_terminal_availability():
             print("      Install: brew install --cask iterm2")
             unavailable.append(("iTerm2", "Not installed (optional)"))
         available.append(("Terminal.app", "Built-in"))
-        
+
     elif system == "Linux":
         print("\n📋 Checking Linux terminal emulators:\n")
-        
+
         for executable, cmd_template, description, install_hint, _ in LINUX_TERMINALS:
             path = shutil.which(executable)
             if path:
@@ -137,12 +177,12 @@ def check_terminal_availability():
                 print(f"      Not installed - Install with: {install_hint}")
                 unavailable.append((executable, install_hint))
             print()
-        
+
     elif system == "Windows":
         print("\n✅ Windows detected - cmd.exe is built-in")
         print("   Command: cmd.exe /k")
         available.append(("cmd.exe", "Built-in"))
-        
+
         # Check for Windows Terminal
         wt_path = shutil.which("wt")
         if wt_path:
@@ -151,9 +191,11 @@ def check_terminal_availability():
             available.append(("Windows Terminal", wt_path))
         else:
             print("\n   ℹ️  Windows Terminal not installed (optional)")
-            print("      Install from Microsoft Store or: winget install Microsoft.WindowsTerminal")
+            print(
+                "      Install from Microsoft Store or: winget install Microsoft.WindowsTerminal"
+            )
             unavailable.append(("Windows Terminal", "Not installed (optional)"))
-            
+
         # Check for PowerShell
         ps_path = shutil.which("pwsh")
         if ps_path:
@@ -168,7 +210,7 @@ def check_terminal_availability():
         print(f"\n⚠️  Unsupported platform: {system}")
         print("   Terminal mode may not work on this platform.")
         print("   You can specify a custom terminal with --editor-script.")
-    
+
     # Summary
     print("\n" + "=" * 60)
     print("📊 Summary")
@@ -181,13 +223,13 @@ def check_terminal_availability():
     else:
         print("   ❌ No terminal emulators found!")
         print("   Please install one of the supported terminals.")
-    
+
     if unavailable and system == "Linux":
         print(f"\n   ℹ️  {len(unavailable)} terminals not installed")
         print("   Run with --log-level DEBUG for installation commands")
-    
+
     print()
-    
+
     return available, unavailable
 
 

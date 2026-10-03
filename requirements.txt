@@ -8,3 +8,4 @@ PyRect==0.2.0
 PyScreeze==0.1.30
 python3-xlib==0.15
 pytweening==1.2.0
+Pygments>=2.10

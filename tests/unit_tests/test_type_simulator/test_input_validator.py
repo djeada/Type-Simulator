@@ -49,3 +49,26 @@ def test_input_validator_cases(case):
             assert (
                 any(warn_sub in w for w in warnings) or warnings == []
             ), f"Case '{case['name']}' missing warning: {warn_sub}"
+
+
+def test_validator_accepts_string_mode():
+    is_valid, errors, _ = validate_inputs("gui", "/nonexistent/file.txt", "vi", "hi")
+    assert not is_valid
+    assert any("File not found" in e for e in errors)
+
+
+def test_validator_direct_mode_needs_output():
+    is_valid, errors, _ = validate_inputs("direct", None, None, "hi")
+    assert not is_valid
+    assert any("output file" in e for e in errors)
+
+
+def test_validator_reports_warnings_at_error_log_level():
+    import logging
+
+    logging.getLogger().setLevel(logging.ERROR)
+    try:
+        _, _, warnings = validate_inputs("focus", None, None, "{BOGUS}")
+    finally:
+        logging.getLogger().setLevel(logging.WARNING)
+    assert any("Invalid sequence" in w for w in warnings)

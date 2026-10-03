@@ -85,7 +85,6 @@ def _read_file(path: Union[str, Path], max_size: int = MAX_FILE_SIZE) -> str:
         # Try different encodings
         for encoding in SUPPORTED_ENCODINGS:
             try:
-                encoding_to_use = encoding
                 if encoding == "utf-8-sig":
                     # Already handles BOM
                     content = path.read_text(encoding=encoding)
@@ -108,14 +107,15 @@ def _read_file(path: Union[str, Path], max_size: int = MAX_FILE_SIZE) -> str:
         raise FileReadError(f"Error reading file '{path}': {e}") from e
 
 
-def get_text_content(text_arg: Optional[str] = None) -> str:
+def get_text_content(text_arg: Optional[str] = None, use_stdin: bool = True) -> str:
     """
     Get text content from various sources in priority order:
-    1. stdin (if available and has data)
+    1. stdin (if available, has data and use_stdin is True)
     2. text argument (as file path or literal)
 
     Args:
         text_arg: Optional text argument that could be a file path or literal text
+        use_stdin: Set to False to ignore stdin, e.g. when text was given explicitly
 
     Returns:
         str: The text content from the highest priority available source
@@ -137,7 +137,7 @@ def get_text_content(text_arg: Optional[str] = None) -> str:
     stdin_err = None
 
     # Only try stdin if we have access to it
-    if hasattr(sys, "stdin") and hasattr(sys.stdin, "isatty"):
+    if use_stdin and hasattr(sys, "stdin") and hasattr(sys.stdin, "isatty"):
         try:
             if not sys.stdin.closed and not sys.stdin.isatty():
                 stdin_available = True

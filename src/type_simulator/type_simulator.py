@@ -6,20 +6,18 @@ Type-Simulator core module.
 This module provides the main TypeSimulator class that orchestrates
 typing text into various destinations using different modes.
 """
+
 import logging
+import os
+import shlex
 import time
 import subprocess  # for process handles
 from enum import Enum
-from pathlib import Path
-from typing import Optional, Union, TYPE_CHECKING
+from typing import Optional
 
 from type_simulator.editor_manager import EditorManager
 from type_simulator.file_manager import FileManager
 from type_simulator.text_typer.__main__ import TextTyper
-
-# Lazy import for pyautogui to allow direct mode without DISPLAY
-if TYPE_CHECKING:
-    import pyautogui as _pyautogui
 
 
 def _get_pyautogui():
@@ -36,15 +34,20 @@ class Mode(Enum):
     TERMINAL = "terminal"
     DIRECT = "direct"
     FOCUS = "focus"
+    REEL = "reel"
+
+
+VI_EDITORS = {"vi", "vim", "nvim", "gvim", "view"}
 
 
 class TypeSimulator:
     """
-    Orchestrates typing text into a destination using three modes:
+    Orchestrates typing text into a destination using four modes:
 
     - GUI:     open a GUI editor (default 'xterm -e vi') and drive it via PyAutoGUI
     - TERMINAL: open a terminal emulator for arbitrary shell commands
-    - DIRECT:  write text directly to the file without GUI
+    - DIRECT:  expand macros and write the result directly to the file, no GUI
+    - FOCUS:   type into the currently focused window
 
     Backwards-compatible signature supports:
       TypeSimulator(editor_script_path, file_path, text, speed, variance)
@@ -62,6 +65,9 @@ class TypeSimulator:
         wait: float = 0.0,
         pre_launch_cmd: Optional[str] = None,
         geometry: Optional[str] = None,
+        pause_probability: float = 0.0,
+        pause_duration: float = 0.0,
+        resolve_text: bool = True,
         **kwargs,
     ):
         file_path = None
@@ -97,8 +103,9 @@ class TypeSimulator:
             geometry,
         )
 
-        # Convert text input from any source
-        if text is not None:
+        # Resolve text that may be a file path or come from stdin, unless the
+        # caller already did (resolving twice would treat content as a path)
+        if text is not None and resolve_text:
             try:
                 from utils.text_input import get_text_content
 
@@ -115,7 +122,14 @@ class TypeSimulator:
         self.file_manager = FileManager(str(file_path)) if file_path else None
         self.text = text
         self.pre_launch_cmd = pre_launch_cmd
-        
+        self.rendered_text: Optional[str] = None
+        if self.mode == Mode.REEL:
+            raise ValueError(
+                "Reel mode renders a video; use type_simulator.reel.render_reel()"
+            )
+        if self.mode == Mode.DIRECT and not self.file_manager:
+            raise ValueError("Direct mode requires a file path.")
+
         # Check for terminal availability early (before TextTyper init)
         # so users get a helpful error message about missing terminals
         if self.mode in (Mode.GUI, Mode.TERMINAL):
@@ -128,17 +142,23 @@ class TypeSimulator:
                 else:
                     # Terminal mode: detect available terminal emulator
                     from utils.utils import get_default_terminal_command
+
                     cmd, error = get_default_terminal_command(geometry=geometry)
                     if cmd is None:
                         raise RuntimeError(error)
             self.editor_manager = EditorManager(cmd)
         else:
             self.editor_manager = None
-        
-        # Use lazy initialization for direct mode (no GUI needed)
-        lazy_init = self.mode == Mode.DIRECT
+
+        # The GUI backend is only initialized when typing starts, so building
+        # a simulator (e.g. for --dry-run or direct mode) needs no display.
         self.texter = TextTyper(
-            text, typing_speed, typing_variance, lazy_init=lazy_init
+            text,
+            typing_speed,
+            typing_variance,
+            lazy_init=True,
+            pause_probability=pause_probability,
+            pause_duration=pause_duration,
         )
 
     def _execute_pre_launch_cmd(self) -> None:
@@ -148,12 +168,10 @@ class TypeSimulator:
 
         self.logger.info(f"Running pre-launch command: {self.pre_launch_cmd}")
         try:
-            import subprocess
-
             subprocess.run(self.pre_launch_cmd, shell=True, check=True)
         except Exception as e:
             self.logger.error(f"Pre-launch command failed: {e}")
-            raise RuntimeError(f"Pre-launch command failed: {e}")
+            raise RuntimeError(f"Pre-launch command failed: {e}") from e
 
     def run(self) -> None:
         """Execute the typing workflow based on the selected mode."""
@@ -171,14 +189,17 @@ class TypeSimulator:
                 proc = self._launch_editor()
                 self._type_content()
                 self._finalize(proc)
-            except Exception:
+            except Exception as e:
                 self.logger.exception("Editor mode failed")
-                raise RuntimeError("Failed to run editor mode") from None
+                raise RuntimeError(f"Failed to run editor mode: {e}") from e
 
         self.logger.info("TypeSimulator completed successfully")
 
     def _run_direct(self) -> None:
-        data = self.text or self.file_manager.load_text()
+        source = self.text if self.text is not None else self.file_manager.load_text()
+        self.texter.text = source
+        data = self.texter.render()
+        self.rendered_text = data
         self.file_manager.save_text(data)
         self.logger.info(
             "Direct mode: wrote %d characters to %s",
@@ -225,12 +246,13 @@ class TypeSimulator:
             # Try to detect the editor and send the right closing sequence
             editor_cmd = self.editor_manager.editor_cmd.lower()
             self.logger.debug(f"Attempting to close editor: {editor_cmd}")
-            if any(e in editor_cmd for e in ["vim", "vi"]):
+            programs = {os.path.basename(part) for part in shlex.split(editor_cmd)}
+            if programs & VI_EDITORS:
                 self.logger.debug("Saving and quitting vim/vi")
                 pyautogui.press("esc")
                 pyautogui.typewrite(":wq\n", interval=0.02)
                 closing_done = True
-            elif "nano" in editor_cmd:
+            elif "nano" in programs:
                 self.logger.debug("Saving and quitting nano")
                 pyautogui.hotkey("ctrl", "x")
                 time.sleep(0.2)
@@ -249,7 +271,6 @@ class TypeSimulator:
         min_timeout = 10
         max_timeout = 120
         text_length = len(self.text) if self.text else 0
-        word_count = len(self.text.split()) if self.text else 0
         # Estimate: each character takes typing_speed + variance/2 on average
         avg_char_time = (
             getattr(self.texter, "typing_speed", 0.15)
@@ -284,9 +305,6 @@ class TypeSimulator:
 
         # Delegate parsing and execution to TextTyper
         self.logger.debug("Delegating to TextTyper for focus-mode typing")
-        # Ensure our texter uses the correct backend if provided
-        if self.texter.backend is None and hasattr(self, "backend"):
-            self.texter.backend = self.backend
         self.texter.text = self.text
         self.texter.simulate_typing()
 

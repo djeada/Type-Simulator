@@ -1,5 +1,10 @@
 import pytest
-from utils.utils import is_program_installed, install_instructions, get_default_terminal_command, check_terminal_availability
+from utils.utils import (
+    is_program_installed,
+    install_instructions,
+    get_default_terminal_command,
+    check_terminal_availability,
+)
 from unittest.mock import patch
 import io
 import sys
@@ -30,7 +35,9 @@ def test_get_default_terminal_command_linux_gnome():
     """Test that gnome-terminal is detected on Linux."""
     with patch("platform.system", return_value="Linux"):
         with patch("shutil.which") as mock_which:
-            mock_which.side_effect = lambda x: "/usr/bin/gnome-terminal" if x == "gnome-terminal" else None
+            mock_which.side_effect = lambda x: (
+                "/usr/bin/gnome-terminal" if x == "gnome-terminal" else None
+            )
             cmd, error = get_default_terminal_command()
             assert cmd == "gnome-terminal -- bash"
             assert error is None
@@ -40,10 +47,12 @@ def test_get_default_terminal_command_linux_konsole():
     """Test that konsole is detected on Linux when gnome-terminal is not available."""
     with patch("platform.system", return_value="Linux"):
         with patch("shutil.which") as mock_which:
+
             def which_side_effect(x):
                 if x == "konsole":
                     return "/usr/bin/konsole"
                 return None
+
             mock_which.side_effect = which_side_effect
             cmd, error = get_default_terminal_command()
             assert cmd == "konsole -e bash"
@@ -54,10 +63,12 @@ def test_get_default_terminal_command_linux_xterm_fallback():
     """Test that xterm is used as fallback on Linux."""
     with patch("platform.system", return_value="Linux"):
         with patch("shutil.which") as mock_which:
+
             def which_side_effect(x):
                 if x == "xterm":
                     return "/usr/bin/xterm"
                 return None
+
             mock_which.side_effect = which_side_effect
             cmd, error = get_default_terminal_command()
             assert cmd == "xterm -e bash"
@@ -102,7 +113,9 @@ def test_check_terminal_availability_linux_with_gnome():
     """Test check_terminal_availability on Linux with gnome-terminal."""
     with patch("utils.utils.platform.system", return_value="Linux"):
         with patch("utils.utils.shutil.which") as mock_which:
-            mock_which.side_effect = lambda x: "/usr/bin/gnome-terminal" if x == "gnome-terminal" else None
+            mock_which.side_effect = lambda x: (
+                "/usr/bin/gnome-terminal" if x == "gnome-terminal" else None
+            )
             # Capture stdout
             captured = io.StringIO()
             sys.stdout = captured
@@ -110,7 +123,7 @@ def test_check_terminal_availability_linux_with_gnome():
                 available, unavailable = check_terminal_availability()
             finally:
                 sys.stdout = sys.__stdout__
-            
+
             output = captured.getvalue()
             assert "gnome-terminal" in output
             assert "✅" in output
@@ -128,7 +141,7 @@ def test_check_terminal_availability_linux_no_terminals():
                 available, unavailable = check_terminal_availability()
             finally:
                 sys.stdout = sys.__stdout__
-            
+
             output = captured.getvalue()
             assert "No terminal emulators found" in output
             assert len(available) == 0
@@ -145,7 +158,7 @@ def test_check_terminal_availability_macos():
                 available, unavailable = check_terminal_availability()
             finally:
                 sys.stdout = sys.__stdout__
-            
+
             output = captured.getvalue()
             assert "macOS detected" in output
             assert "Terminal.app is built-in" in output
@@ -162,7 +175,7 @@ def test_check_terminal_availability_windows():
                 available, unavailable = check_terminal_availability()
             finally:
                 sys.stdout = sys.__stdout__
-            
+
             output = captured.getvalue()
             assert "Windows detected" in output
             assert "cmd.exe is built-in" in output
@@ -173,7 +186,9 @@ def test_get_default_terminal_command_with_geometry_gnome():
     """Test that geometry is applied to gnome-terminal on Linux."""
     with patch("platform.system", return_value="Linux"):
         with patch("shutil.which") as mock_which:
-            mock_which.side_effect = lambda x: "/usr/bin/gnome-terminal" if x == "gnome-terminal" else None
+            mock_which.side_effect = lambda x: (
+                "/usr/bin/gnome-terminal" if x == "gnome-terminal" else None
+            )
             cmd, error = get_default_terminal_command(geometry="80x24")
             assert cmd == "gnome-terminal --geometry=80x24 -- bash"
             assert error is None
@@ -183,10 +198,12 @@ def test_get_default_terminal_command_with_geometry_xterm():
     """Test that geometry is applied to xterm on Linux."""
     with patch("platform.system", return_value="Linux"):
         with patch("shutil.which") as mock_which:
+
             def which_side_effect(x):
                 if x == "xterm":
                     return "/usr/bin/xterm"
                 return None
+
             mock_which.side_effect = which_side_effect
             cmd, error = get_default_terminal_command(geometry="100x40")
             assert cmd == "xterm -geometry 100x40 -e bash"
@@ -197,10 +214,12 @@ def test_get_default_terminal_command_with_geometry_xfce4():
     """Test that geometry is applied to xfce4-terminal on Linux."""
     with patch("platform.system", return_value="Linux"):
         with patch("shutil.which") as mock_which:
+
             def which_side_effect(x):
                 if x == "xfce4-terminal":
                     return "/usr/bin/xfce4-terminal"
                 return None
+
             mock_which.side_effect = which_side_effect
             cmd, error = get_default_terminal_command(geometry="120x30")
             assert cmd == "xfce4-terminal --geometry=120x30 -e bash"
@@ -229,11 +248,13 @@ def test_get_default_terminal_command_without_geometry():
     """Test that terminals without geometry support fall back to default command."""
     with patch("platform.system", return_value="Linux"):
         with patch("shutil.which") as mock_which:
+
             def which_side_effect(x):
                 # konsole doesn't have geometry in our template
                 if x == "konsole":
                     return "/usr/bin/konsole"
                 return None
+
             mock_which.side_effect = which_side_effect
             cmd, error = get_default_terminal_command(geometry="80x24")
             # konsole's geometry template doesn't have {geometry} placeholder

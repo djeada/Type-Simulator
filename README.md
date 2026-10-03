@@ -2,11 +2,19 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.7%2B-blue)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-2.1.1-green)](https://github.com/djeada/Type-Simulator)
+[![Version](https://img.shields.io/badge/version-2.2.0-green)](https://github.com/djeada/Type-Simulator)
 
 **Type-Simulator** is a versatile Python tool for automating human-like typing in any text editor or input field. Whether you're creating demos, running automated tutorials, or stress-testing text-based applications, Type-Simulator lets you control keyboard inputs with precision and randomness for a natural effect.
 
-## 🆕 What's New in v2.1.0
+## 🆕 What's New in v2.2.0
+
+- **🎬 Reel Mode**: Render vertical videos for Reels/Shorts/TikTok: your script is typed into vim, saved, executed for real, with keyboard sounds and a generated royalty-free soundtrack (see [Reel Mode](#5-reel-mode---mode-reel))
+- **Macros in Direct Mode**: `{REPEAT}`, `{LOOP}`, `{COUNTER}`, `{DATE}`, `{NL}`, `{TAB}`, variables etc. are now expanded when writing to a file (keys, mouse actions and waits are ignored)
+- **Profile Pauses**: Profiles now add their micro-pauses between words, not just speed and variance
+- **Counter Actions Fixed**: `{COUNTER_name_init_5}`, `{COUNTER_name_get}` etc. are parsed correctly
+- **Fixes**: `{MOUSE_CLICK_*}` no longer crashes, `--pre-launch-cmd` is honored, `--dry-run` actually validates files/editors and reports macro problems without needing a display, an explicit `--input` takes priority over piped stdin
+
+## What's New in v2.1.0
 
 - **5 New Typing Profiles**: `programmer`, `storyteller`, `casual`, `expert`, `nervous`
 - **Enhanced Macro System**: New commands including `{DATE}`, `{TIME}`, `{DATETIME}`, `{COUNTER}`, `{LOOP}`, `{NL}`, `{TAB}`
@@ -16,7 +24,7 @@
 
 ## 📑 Table of Contents
 
-- [What's New](#-whats-new-in-v210)
+- [What's New](#-whats-new-in-v220)
 - [Features](#-features)
 - [System Requirements](#-system-requirements)
 - [Installation](#-installation)
@@ -53,6 +61,7 @@
   - **Terminal Mode**: Open a terminal emulator for shell-driven typing
   - **Direct Mode**: Write text straight to a file without a GUI (no DISPLAY required)
   - **Focus Mode**: Type directly into the currently focused window
+  - **Reel Mode**: Render a 1080×1920 video of code being typed and run, ready for Reels/Shorts
 - **Powerful Macro System**: Support for repeat blocks, loops, random text, speed changes, variables, waits, mouse actions, key combinations, date/time, counters, and formatting
 - **Statistics**: Get detailed typing statistics including WPM, character breakdown, and duration
 - **Dry Run**: Validate input without executing actions
@@ -67,6 +76,7 @@
   - `xterm` - Terminal emulator (default)
   - `xdotool` - X11 automation tool
   - `xfonts-base` - Basic X11 fonts
+- **For reel mode**: `ffmpeg` (no display needed)
 
 ## 📦 Installation
 
@@ -186,7 +196,7 @@ Options:
 
 ## 🎯 Typing Modes
 
-Type-Simulator supports four different typing modes:
+Type-Simulator supports five different modes:
 
 ### 1. Direct Mode (`--mode direct`)
 
@@ -194,8 +204,11 @@ Writes text directly to a file without any GUI interaction. Fastest mode, ideal 
 
 **Required:** `--output` flag to specify destination file
 
+Macros that produce text are expanded before writing; keyboard shortcuts, mouse actions and `{WAIT_N}` are skipped.
+
 ```bash
 python -m src.main --mode direct --output result.txt --input "Direct write"
+python -m src.main --mode direct --output list.txt --input "{LOOP_3}Item {COUNTER}{NL}{/LOOP}"
 ```
 
 ### 2. Focus Mode (`--mode focus`)
@@ -229,9 +242,49 @@ python -m src.main --mode gui --editor-script "gedit" --input "Text in editor"
 python -m src.main --mode gui --editor-script "xterm -e vim" --input "Vim commands"
 ```
 
+### 5. Reel Mode (`--mode reel`)
+
+Renders a vertical video (1080×1920, H.264 + AAC) for Instagram Reels, YouTube Shorts or TikTok. A terminal window types `vim <file>`, your script is typed in with syntax highlighting, saved with `:wq`, then **actually executed**, and its output (ANSI colors, `\r` progress bars) scrolls by. Keyboard clicks and a generated synthwave track play underneath.
+
+Frames are drawn directly, so it runs headless: no X server, terminal emulator or screen recorder needed, only `ffmpeg`.
+
+<p align="center"><img src="demo/reel/preview.png" width="270" alt="Reel preview"></p>
+
+```bash
+# Python "hacker" reel that lasts ~30 seconds
+python -m src.main --mode reel --input demo/reel/hack.py --output reel.mp4 \
+    --title "Hacking the mainframe in 30 seconds" --footer "@yourhandle" --duration 30
+
+# Another theme, your own prompt and music track
+python -m src.main --mode reel --input scan.sh --output scan.mp4 \
+    --theme dracula --prompt "neo@matrix" --music ~/music/track.mp3 --music-volume 0.25
+
+# Quick look at the layout without rendering the whole video
+python -m src.main --mode reel --input hack.py --output frame.png --title "Test" --preview
+```
+
+| Option | Description |
+|--------|-------------|
+| `--title`, `--subtitle`, `--footer` | Text above and below the terminal |
+| `--theme` | `hacker` (default, green with scanlines), `dracula`, `monokai`, `nord` |
+| `--prompt` | Shell prompt shown, e.g. `neo@matrix` |
+| `--duration` | Scale typing speed so the video lasts about N seconds |
+| `--profile`, `--speed`, `--variance` | Typing rhythm (defaults are tuned for reels) |
+| `--music` | `builtin` (default, generated and royalty-free), a file path, or `none` |
+| `--music-volume`, `--key-volume`, `--no-key-sounds` | Audio mix |
+| `--run-cmd` | Command typed to run the script, `{file}` = file name (default from extension/shebang, e.g. `python3 {file}`) |
+| `--no-run` / `--fake-output FILE` | Don't execute: end after saving, or show prepared output instead |
+| `--run-timeout` | Stop the script after N seconds (default 20) |
+| `--filename` | File name shown on screen |
+| `--size`, `--fps`, `--font`, `--font-size` | Video format and typography (e.g. `--size 1080x1080` for square) |
+| `--seed` | Reproducible typing rhythm and music |
+| `--preview` | Write one PNG frame instead of the video |
+
+> ⚠️ The script really runs on your machine (in its own directory, with a timeout). Use `--fake-output` or `--no-run` for anything you don't want executed.
+
 ## 🎹 Typing Profiles
 
-Type-Simulator includes pre-configured typing profiles that simulate different typing styles:
+Type-Simulator includes pre-configured typing profiles that simulate different typing styles. Besides speed and variance, each profile adds occasional pauses between words (none for `robotic`):
 
 | Profile | Speed | Variance | Description |
 |---------|-------|----------|-------------|
@@ -469,7 +522,7 @@ python -m src.main --mode focus --input "{LOOP_3_num}Line {GET_num}{NL}{/LOOP}"
 
 Manage sequential counters for auto-numbering.
 
-**Syntax:** `{COUNTER}` or `{COUNTER_name}` or `{COUNTER_name_action}`
+**Syntax:** `{COUNTER}`, `{COUNTER_name}`, `{COUNTER_name_action}` or `{COUNTER_name_action_start}`, where action is `next` (default, increment and type), `get` (type current value) or `init` (reset so the next value typed is `start`)
 
 ```bash
 # Simple counter (auto-increments)
@@ -478,6 +531,9 @@ python -m src.main --mode focus --input "{COUNTER}. Item A{NL}{COUNTER}. Item B{
 
 # Named counter
 python -m src.main --mode focus --input "{COUNTER_items}. First{NL}{COUNTER_items}. Second"
+
+# Start numbering at 10
+python -m src.main --mode focus --input "{COUNTER_step_init_10}{COUNTER_step}. Ten{NL}{COUNTER_step}. Eleven"
 ```
 
 ### Formatting Macros

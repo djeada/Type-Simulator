@@ -2,11 +2,13 @@
 TextTyper module for simulating human-like typing.
 
 This module provides the core typing simulation functionality,
-including support for various typing speeds, variance, and 
+including support for various typing speeds, variance, and
 clipboard/backend strategies.
 """
 
 import os
+import random
+import time
 import logging
 from typing import List, Optional, Any
 
@@ -26,6 +28,44 @@ def _get_pyautogui():
     import pyautogui
 
     return pyautogui
+
+
+# ─────────────────────── Render backend ───────────────────────
+class RenderBackend:
+    """
+    Backend that records the text a token stream would produce instead of
+    sending keystrokes. Used by direct mode to expand macros without a display.
+    """
+
+    _KEY_TEXT = {"enter": "\n", "return": "\n", "tab": "\t", "space": " "}
+
+    def __init__(self) -> None:
+        self._parts: List[str] = []
+
+    @property
+    def text(self) -> str:
+        return "".join(self._parts)
+
+    def write(self, text: str, interval: float = 0.0) -> None:
+        self._parts.append(text)
+
+    def press(self, key: str) -> None:
+        if key in self._KEY_TEXT:
+            self._parts.append(self._KEY_TEXT[key])
+        else:
+            logger.debug("Ignoring key '%s' while rendering", key)
+
+    def hotkey(self, *keys: str) -> None:
+        if len(keys) == 1:
+            self.press(keys[0])
+        else:
+            logger.debug("Ignoring hotkey %s while rendering", "+".join(keys))
+
+    def moveTo(self, *args, **kwargs) -> None:
+        logger.debug("Ignoring mouse move while rendering")
+
+    def click(self, *args, **kwargs) -> None:
+        logger.debug("Ignoring mouse click while rendering")
 
 
 # ─────────────────────────── Typist ───────────────────────────
@@ -49,6 +89,8 @@ class Typist:
         backend: Optional[Any] = None,
         strict: bool = False,
         lazy_init: bool = False,
+        pause_probability: float = 0.0,
+        pause_duration: float = 0.0,
     ):
         self.typing_speed = typing_speed
         self.typing_variance = typing_variance
@@ -56,6 +98,9 @@ class Typist:
         self.backend = backend
         self.clipboard = None
         self.pynput = None
+        self.pause_probability = pause_probability
+        self.pause_duration = pause_duration
+        self.render_only = isinstance(backend, RenderBackend)
         self._initialized = False
 
         if not lazy_init:
@@ -64,6 +109,10 @@ class Typist:
     def _init_backend(self) -> None:
         """Initialize the backend and clipboard when needed."""
         if self._initialized:
+            return
+
+        if self.render_only:
+            self._initialized = True
             return
 
         if self.backend is None:
@@ -99,7 +148,18 @@ class Typist:
             try:
                 t.execute(self)
             except Exception as e:
+                if self.strict:
+                    raise
                 logger.error("Token exec error: %s", e)
+
+    def maybe_pause(self) -> None:
+        """Randomly pause between words, as configured by the typing profile."""
+        if self.render_only or self.pause_probability <= 0:
+            return
+        if random.random() < self.pause_probability:
+            pause = self.pause_duration * random.uniform(0.5, 1.5)
+            logger.debug("Micro-pause for %.2fs", pause)
+            time.sleep(pause)
 
 
 # ─────────────────────────── Facade ───────────────────────────
@@ -126,6 +186,8 @@ class TextTyper:
         backend: Optional[Any] = None,
         strict: bool = False,
         lazy_init: bool = False,
+        pause_probability: float = 0.0,
+        pause_duration: float = 0.0,
     ):
         self.text = text
         self.typing_speed = typing_speed
@@ -135,7 +197,13 @@ class TextTyper:
         self._lazy_init = lazy_init
         self._parser = CommandParser(strict)
         self._typist = Typist(
-            typing_speed, typing_variance, backend, strict, lazy_init=lazy_init
+            typing_speed,
+            typing_variance,
+            backend,
+            strict,
+            lazy_init=lazy_init,
+            pause_probability=pause_probability,
+            pause_duration=pause_duration,
         )
         # Only set backend immediately if not using lazy initialization
         if not lazy_init and self.backend is None:
@@ -151,3 +219,13 @@ class TextTyper:
         toks = self._parser.parse(self.text)
         logger.info("Parsed %d tokens", len(toks))
         self._typist.execute(toks)
+
+    def render(self) -> str:
+        """
+        Expand macros into the plain text they would type, without touching
+        the keyboard. Keys other than enter/tab, mouse actions and waits are
+        ignored.
+        """
+        typist = Typist(backend=RenderBackend(), strict=self.strict)
+        typist.execute(self._parser.parse(self.text or ""))
+        return typist.backend.text
