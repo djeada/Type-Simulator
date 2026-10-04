@@ -65,6 +65,10 @@ Examples:
   python -m src.main --mode reel --input hack.py --output reel.mp4 \
       --title "Hacking the mainframe" --footer "@me" --duration 30
 
+  # Web page reel: type the HTML in vim, then show it live in a browser window
+  python -m src.main --mode reel --input plasma.html --output plasma.mp4 \
+      --title "Plasma in vanilla JS" --browser-duration 12
+
 Available Profiles:
   human         - Natural typing with realistic variations (0.08s, ±0.04)
   fast          - Quick professional typing (0.03s, ±0.01)
@@ -329,6 +333,38 @@ For more information, visit: https://github.com/djeada/Type-Simulator
             "--preview",
             action="store_true",
             help="Write a single PNG frame to --output instead of a video.",
+        )
+        browser = reel.add_mutually_exclusive_group()
+        browser.add_argument(
+            "--browser",
+            dest="browser",
+            action="store_true",
+            default=None,
+            help="After saving, open the file in a browser window and show the "
+            "live page (default for .html/.htm/.svg). Needs Playwright.",
+        )
+        browser.add_argument(
+            "--no-browser",
+            dest="browser",
+            action="store_false",
+            help="Run .html files like any other script instead of opening them.",
+        )
+        reel.add_argument(
+            "--browser-cmd",
+            help="Command typed to open the page; {file} is the file name "
+            "(default: 'firefox {file}').",
+        )
+        reel.add_argument(
+            "--browser-duration",
+            type=float,
+            default=10.0,
+            help="Seconds of live page shown before the ending (default: 10).",
+        )
+        reel.add_argument(
+            "--browser-zoom",
+            type=float,
+            default=1.0,
+            help="Page zoom; values above 1 render the page larger, like a phone.",
         )
 
     def parse(self):

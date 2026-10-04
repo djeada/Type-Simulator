@@ -192,7 +192,7 @@ def test_full_screen_animation_shows_complete_frames_only():
         (0.0, "intro\n\x1b[2J"),
         (0.1, "\x1b[HAAA\nAAA\n"),
         (0.2, "\x1b[HBB"),
-        (0.25, "B\nBBB\n"),
+        (0.2001, "B\nBBB\n"),
         (0.3, "done\n"),
     ]
     tl = _build(chunks=chunks)
@@ -215,3 +215,123 @@ def test_title_wrap_is_balanced():
     lines = _wrap_words("A spinning 3D donut in pure C", font, 940)
     assert len(lines) == 2
     assert len(lines[-1].split()) > 1
+
+
+def test_animation_text_after_a_pause_appears_progressively():
+    chunks = [(0.0, "\x1b[2Jframe\n"), (0.5, "W"), (0.6, "a"), (0.7, "k")]
+    tl = _build(chunks=chunks)
+    texts = {
+        "".join(r[0] for line in s.shell for r in line)
+        for _, s in tl.keyframes
+        if s.mode == SHELL
+    }
+    assert {"frameW", "frameWa", "frameWak"} <= texts
+
+
+# ─────────────────────────── browser mode ───────────────────────────
+def test_timeline_cuts_to_browser_frames():
+    from type_simulator.reel.timeline import BROWSER
+
+    builder = TimelineBuilder(THEME, Pacing(), rows=20, seed=3)
+    tl = builder.build(
+        "<h1>hi</h1>", "a.html", None, [], browser_command="firefox a.html",
+        browser_frames=60, browser_fps=30,
+    )  # fmt: skip
+    browser = [(t, s) for t, s in tl.keyframes if s.mode == BROWSER]
+    assert [s.frame for _, s in browser] == list(range(60))
+    assert abs(tl.duration - (browser[0][0] + 2.0)) < 1e-6
+    shell = [s for _, s in tl.keyframes if s.mode == SHELL][-1]
+    assert "firefox a.html" in "".join(r[0] for line in shell.shell for r in line)
+
+
+def test_renderer_composites_page_frames(tmp_path):
+    from PIL import Image
+
+    from type_simulator.reel.browser import PageCapture
+    from type_simulator.reel.render import (
+        FrameRenderer,
+        browser_viewport,
+        compute_layout,
+        find_font,
+    )
+    from type_simulator.reel.timeline import BROWSER, Scene
+
+    layout = compute_layout(540, 960, None, find_font("monospace"))
+    x0, y0, x1, y1 = browser_viewport(layout)
+    capture = PageCapture(tmp_path, 2, 30, (x1 - x0, y1 - y0), title="Page")
+    for i, color in enumerate([(255, 0, 0), (0, 0, 255)]):
+        Image.new("RGB", capture.size, color).save(capture.path(i))
+    renderer = FrameRenderer(
+        THEME, layout, "x", [None], "a.html", capture=capture, url="file:///a.html"
+    )
+    center = ((x0 + x1) // 2, (y0 + y1) // 2)
+    first = renderer.render(Scene(BROWSER, frame=0), False)
+    second = renderer.render(Scene(BROWSER, frame=1), False)
+    assert first.getpixel(center)[0] > 240
+    assert second.getpixel(center)[2] > 240
+    # Rounded window corners stay intact, so the page doesn't spill over
+    assert first.getpixel((x0, y1 - 1)) != first.getpixel(center)
+
+
+def test_validation_requires_playwright_for_browser_reels(monkeypatch):
+    from type_simulator.reel import browser
+    from type_simulator.validation import validate_inputs
+
+    monkeypatch.setattr(browser, "playwright_available", lambda: False)
+    ok, errors, _ = validate_inputs("reel", "out.mp4", None, "<p>", browser=True)
+    assert not ok and any("Playwright" in e for e in errors)
+
+
+def test_cli_picks_browser_by_extension():
+    from types import SimpleNamespace
+
+    from src.main import _reel_uses_browser
+
+    args = SimpleNamespace(browser=None, filename=None, input="site/index.HTML")
+    assert _reel_uses_browser(args)
+    assert not _reel_uses_browser(
+        SimpleNamespace(browser=None, filename=None, input="a.py")
+    )
+    assert not _reel_uses_browser(
+        SimpleNamespace(browser=False, filename=None, input="a.html")
+    )
+
+
+def _chromium_works():
+    from type_simulator.reel.browser import playwright_available
+
+    if not playwright_available():
+        return False
+    from playwright.sync_api import sync_playwright
+
+    try:
+        with sync_playwright() as pw:
+            pw.chromium.launch().close()
+        return True
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(not _chromium_works(), reason="Playwright Chromium not available")
+def test_capture_page_advances_animation_frame_by_frame(tmp_path):
+    from PIL import ImageChops
+
+    from type_simulator.reel.browser import capture_page
+
+    page = tmp_path / "anim.html"
+    page.write_text(
+        "<title>Anim</title><body style=margin:0><canvas id=c></canvas><script>"
+        "const c=document.getElementById('c'),x=c.getContext('2d');"
+        "c.width=innerWidth;c.height=innerHeight;"
+        "requestAnimationFrame(function f(t){x.fillStyle='#000';"
+        "x.fillRect(0,0,c.width,c.height);x.fillStyle='#fff';"
+        "x.fillRect(t/10,0,20,20);requestAnimationFrame(f)})</script>"
+    )
+    capture = capture_page(page, (200, 120), 10, 0.5, tmp_path / "frames")
+    assert capture.count == 5
+    assert capture.title == "Anim"
+    assert capture.console_errors == []
+    frames = [capture.frame(i) for i in range(5)]
+    assert all(f.size == (200, 120) for f in frames)
+    # The square moves 10 px per 100 ms frame
+    assert ImageChops.difference(frames[0], frames[1]).getbbox() is not None

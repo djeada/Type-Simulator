@@ -1,6 +1,7 @@
 """Draws reel frames with Pillow."""
 
 import logging
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -10,7 +11,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 from type_simulator.reel.terminal import Line, Run
 from type_simulator.reel.themes import RGB, Theme
-from type_simulator.reel.timeline import EDITOR, Scene
+from type_simulator.reel.timeline import BROWSER, EDITOR, Scene
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,9 @@ _FALLBACK_FONTS = {
         "C:/Windows/Fonts/arialbd.ttf",
     ],
 }
+
+FULL_BLOCK = "\u2588"
+_BLOCK_SPLIT_RE = re.compile(f"{FULL_BLOCK}+|[^{FULL_BLOCK}]+")
 
 _TRAFFIC_LIGHTS = [(255, 95, 86), (255, 189, 46), (39, 201, 63)]
 
@@ -121,6 +125,18 @@ def compute_layout(
     )
 
 
+def browser_chrome_heights(layout: Layout) -> Tuple[int, int]:
+    """Heights of the browser's tab strip and toolbar."""
+    return int(58 * layout.scale), int(62 * layout.scale)
+
+
+def browser_viewport(layout: Layout) -> Tuple[int, int, int, int]:
+    """Box of the page area inside the browser window."""
+    x0, y0, x1, y1 = layout.window
+    tabs, toolbar = browser_chrome_heights(layout)
+    return (x0, y0 + tabs + toolbar, x1, y1)
+
+
 def _wrap_runs(line: Sequence[Run], cols: int) -> List[List[Run]]:
     rows: List[List[Run]] = [[]]
     used = 0
@@ -150,6 +166,9 @@ class FrameRenderer:
         mono_path: Optional[str] = None,
         mono_bold_path: Optional[str] = None,
         title_font_path: Optional[str] = None,
+        ui_font_path: Optional[str] = None,
+        capture=None,
+        url: Optional[str] = None,
     ):
         self.theme = theme
         self.layout = layout
@@ -159,6 +178,8 @@ class FrameRenderer:
         self.font = _load_font(mono_path, layout.font_size)
         self.font_bold = _load_font(mono_bold_path or mono_path, layout.font_size)
         self.title_font_path = title_font_path
+        self.ui_font_path = ui_font_path or title_font_path
+        self.capture = capture
         total_lines = script.count("\n") + 1
         self.gutter = len(str(total_lines)) + 1
         self.code_cols = layout.cols - self.gutter - 1
@@ -166,12 +187,20 @@ class FrameRenderer:
             "shell": self._base(f"{theme.prompt}: ~", title, subtitle, footer),
             EDITOR: self._base(f"{filename} - vim", title, subtitle, footer),
         }
+        if capture is not None:
+            page = (capture.title or filename, url or filename)
+            self._bases[BROWSER] = self._base(page[0], title, subtitle, footer, page)
+            self._page_mask = self._window_mask().crop(browser_viewport(layout))
         self._scanlines = self._scanline_mask() if theme.scanlines else None
         self._cursor_line_bg = _mix(theme.window_bg, theme.fg, 0.07)
 
     # ------------------------------------------------------------------ #
     def render(self, scene: Scene, cursor_on: bool) -> Image.Image:
         img = self._bases[scene.mode].copy()
+        if scene.mode == BROWSER:
+            box = browser_viewport(self.layout)
+            img.paste(self.capture.frame(scene.frame), box[:2], self._page_mask)
+            return img
         draw = ImageDraw.Draw(img)
         if scene.mode == EDITOR:
             self._draw_editor(draw, scene, cursor_on)
@@ -199,13 +228,24 @@ class FrameRenderer:
 
     def _draw_runs(self, draw, runs: Sequence[Run], col: int, row: int) -> int:
         for text, color, bold in runs:
-            x, y = self._cell(col, row)
-            draw.text(
-                (x, y),
-                text,
-                font=self.font_bold if bold else self.font,
-                fill=color or self.theme.fg,
-            )
+            fill = color or self.theme.fg
+            font = self.font_bold if bold else self.font
+            if FULL_BLOCK not in text:
+                draw.text(self._cell(col, row), text, font=font, fill=fill)
+            else:
+                # Full blocks become solid cells, so pixel art has no seams
+                for m in _BLOCK_SPLIT_RE.finditer(text):
+                    start = col + m.start()
+                    if m.group()[0] == FULL_BLOCK:
+                        x0, y0 = self._cell(start, row)
+                        x1, _ = self._cell(start + len(m.group()), row)
+                        draw.rectangle(
+                            (x0, y0, x1 - 1, y0 + self.layout.line_h - 1), fill=fill
+                        )
+                    elif m.group().strip():
+                        draw.text(
+                            self._cell(start, row), m.group(), font=font, fill=fill
+                        )
             col += len(text)
         return col
 
@@ -295,7 +335,8 @@ class FrameRenderer:
         self._draw_runs(draw, runs, col, row)
 
     # ------------------------------------------------------------------ #
-    def _base(self, window_title, title, subtitle, footer) -> Image.Image:
+    def _base(self, window_title, title, subtitle, footer, page=None) -> Image.Image:
+        """Background, titles and window; `page` = (tab title, url) for a browser."""
         th, lay = self.theme, self.layout
         W, H = lay.width, lay.height
         img = Image.new("RGB", (W, H), th.bg_bottom)
@@ -316,6 +357,10 @@ class FrameRenderer:
 
         draw = ImageDraw.Draw(img)
         draw.rounded_rectangle((x0, y0, x1, y1), radius=radius, fill=th.window_bg)
+        if page:
+            self._draw_browser_chrome(draw, *page)
+            self._draw_texts(draw, title, subtitle, footer)
+            return img
         draw.rounded_rectangle(
             (x0, y0, x1, y0 + lay.titlebar_h), radius=radius, fill=th.titlebar_bg
         )
@@ -337,15 +382,120 @@ class FrameRenderer:
             anchor="mm",
         )
 
+        self._draw_texts(draw, title, subtitle, footer)
+        return img
+
+    def _draw_texts(self, draw, title, subtitle, footer) -> None:
+        th, lay = self.theme, self.layout
+        x0, y0, x1, y1 = lay.window
         if title:
             self._draw_wrapped(
                 draw, title, int(66 * lay.scale), th.title_fg, y0, subtitle
             )
         if footer:
             font = _load_font(self.title_font_path, int(40 * lay.scale))
-            fy = (y1 + H) // 2
-            draw.text((W // 2, fy), footer, font=font, fill=th.subtitle_fg, anchor="mm")
-        return img
+            fy = (y1 + lay.height) // 2
+            draw.text(
+                (lay.width // 2, fy),
+                footer,
+                font=font,
+                fill=th.subtitle_fg,
+                anchor="mm",
+            )
+
+    def _draw_browser_chrome(self, draw, tab_title: str, url: str) -> None:
+        """Tab strip and toolbar of a browser window, in the theme's colors."""
+        th, lay = self.theme, self.layout
+        s = lay.scale
+        x0, y0, x1, _ = lay.window
+        tabs_h, bar_h = browser_chrome_heights(lay)
+        radius = int(26 * s)
+        strip = th.titlebar_bg
+        active = _mix(th.window_bg, th.fg, 0.1)
+        top = y0 + tabs_h + bar_h
+        draw.rounded_rectangle((x0, y0, x1, top), radius=radius, fill=strip)
+        draw.rectangle((x0, y0 + tabs_h, x1, top), fill=active)
+
+        r, cy = int(11 * s), y0 + tabs_h // 2 + int(3 * s)
+        for i, color in enumerate(_TRAFFIC_LIGHTS):
+            cx = x0 + int(36 * s) + i * int(36 * s)
+            draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=color)
+
+        # Active tab with favicon, title and close button, then a "+"
+        font = _load_font(self.ui_font_path, int(23 * s))
+        tx0, tx1 = x0 + int(140 * s), x0 + int(560 * s)
+        draw.rounded_rectangle(
+            (tx0, y0 + int(9 * s), tx1, y0 + tabs_h + radius),
+            radius=int(14 * s),
+            fill=active,
+        )
+        fav = int(9 * s)
+        fx = tx0 + int(28 * s)
+        draw.ellipse((fx - fav, cy - fav, fx + fav, cy + fav), fill=th.accent)
+        max_w = tx1 - tx0 - int(100 * s)
+        label = tab_title
+        while label and font.getlength(label) > max_w:
+            label = label[:-2] + "…"
+        draw.text((fx + int(24 * s), cy), label, font=font, fill=th.fg, anchor="lm")
+        draw.text(
+            (tx1 - int(28 * s), cy), "×", font=font, fill=th.titlebar_fg, anchor="mm"
+        )
+        plus = _load_font(self.ui_font_path, int(32 * s))
+        draw.text(
+            (tx1 + int(34 * s), cy), "+", font=plus, fill=th.titlebar_fg, anchor="mm"
+        )
+
+        # Toolbar: navigation buttons and the address bar
+        by = y0 + tabs_h + bar_h // 2
+        self._draw_nav_icons(draw, x0 + int(38 * s), by, int(50 * s), th.titlebar_fg)
+        ux0, ux1 = x0 + int(190 * s), x1 - int(28 * s)
+        half = int(22 * s)
+        draw.rounded_rectangle(
+            (ux0, by - half, ux1, by + half), radius=half, fill=th.window_bg
+        )
+        head, _, tail = url.rpartition("/")
+        x = ux0 + int(22 * s)
+        url_font = _load_font(self.ui_font_path, int(22 * s))
+        if head:
+            draw.text((x, by), head + "/", font=url_font, fill=th.dim, anchor="lm")
+            x += int(url_font.getlength(head + "/"))
+        draw.text((x, by), tail, font=url_font, fill=th.fg, anchor="lm")
+
+    def _draw_nav_icons(self, draw, x: int, y: int, step: int, color) -> None:
+        """Back, forward and reload buttons drawn as shapes (fonts may lack them)."""
+        s = self.layout.scale
+        r, w = int(11 * s), max(2, int(3 * s))
+        for i, direction in enumerate((-1, 1)):
+            cx = x + i * step
+            tip, tail = cx + direction * r, cx - direction * r
+            draw.line((tail, y, tip, y), fill=color, width=w)
+            for dy in (-1, 1):
+                draw.line(
+                    (tip, y, tip - direction * r * 0.7, y + dy * r * 0.7),
+                    fill=color,
+                    width=w,
+                )
+        cx = x + 2 * step
+        draw.arc(
+            (cx - r, y - r, cx + r, y + r), start=-60, end=250, fill=color, width=w
+        )
+        hx, hy = cx + r * 0.5, y - r * 0.87  # arrow head at the open end of the arc
+        draw.polygon(
+            [
+                (hx + 5 * s, hy - 1 * s),
+                (hx - 4 * s, hy - 6 * s),
+                (hx - 3 * s, hy + 5 * s),
+            ],
+            fill=color,
+        )
+
+    def _window_mask(self) -> Image.Image:
+        lay = self.layout
+        mask = Image.new("L", (lay.width, lay.height), 0)
+        ImageDraw.Draw(mask).rounded_rectangle(
+            lay.window, radius=int(26 * lay.scale), fill=255
+        )
+        return mask
 
     def _draw_wrapped(self, draw, title, size, color, window_top, subtitle) -> None:
         lay = self.layout
