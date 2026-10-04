@@ -1,6 +1,7 @@
 """
 Reel mode: render a vertical video (Reels / Shorts / TikTok) of a script being
 typed into vim in a terminal, saved, executed, with key clicks and music.
+Web pages (.html) are opened in a browser window instead, showing the live page.
 
 Frames are drawn with Pillow and encoded with ffmpeg, so no display, terminal
 emulator or screen recorder is needed.
@@ -19,7 +20,13 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from type_simulator.reel import audio
-from type_simulator.reel.render import FrameRenderer, compute_layout, find_font
+from type_simulator.reel.browser import BROWSER_EXTENSIONS, PageCapture, capture_page
+from type_simulator.reel.render import (
+    FrameRenderer,
+    browser_viewport,
+    compute_layout,
+    find_font,
+)
 from type_simulator.reel.runner import (
     RunResult,
     default_run_command,
@@ -71,6 +78,11 @@ class ReelConfig:
     crf: int = 20
     preset: str = "medium"
     preview: bool = False  # write a single PNG frame instead of a video
+    # Open the file in a browser instead of running it (default: for .html/.htm/.svg)
+    browser: Optional[bool] = None
+    browser_command: Optional[str] = None  # shown in the shell; {file} = filename
+    browser_duration: float = 10.0  # seconds of live page before the closing hold
+    browser_zoom: float = 1.0  # >1 renders the page larger (smaller CSS viewport)
 
 
 @dataclass
@@ -119,12 +131,52 @@ def _collect_output(cfg: ReelConfig, script: str, filename: str, cols: int, rows
     return command, result.chunks, result.timed_out, result.exit_code
 
 
+def _page_url(theme, filename: str) -> str:
+    user = theme.prompt.split("@")[0]
+    home = "/root" if user == "root" else f"/home/{user}"
+    return f"file://{home}/{filename}"
+
+
+def _capture(
+    cfg: ReelConfig, script: str, filename: str, layout, tmp: Path
+) -> PageCapture:
+    path = cfg.script_path
+    if not (path and path.is_file() and path.name == filename):
+        path = tmp / "site" / filename
+        path.parent.mkdir()
+        path.write_text(script, encoding="utf-8")
+    x0, y0, x1, y1 = browser_viewport(layout)
+    return capture_page(
+        path,
+        (x1 - x0, y1 - y0),
+        cfg.fps,
+        cfg.browser_duration + cfg.pacing.end_hold,
+        tmp / "frames",
+        zoom=cfg.browser_zoom,
+    )
+
+
 def _build_timeline(
-    cfg, theme, rows, script, filename, command, chunks, timed_out, seed
+    cfg, theme, rows, script, filename, command, chunks, timed_out, seed, page=None
 ):
+    browser_command = None
+    if page is not None:
+        browser_command = (cfg.browser_command or "firefox {file}").format(
+            file=filename
+        )
+
     def build(pacing: Pacing) -> Timeline:
         builder = TimelineBuilder(theme, pacing, rows, seed=seed)
-        return builder.build(script, filename, command, chunks, timed_out)
+        return builder.build(
+            script,
+            filename,
+            command,
+            chunks,
+            timed_out,
+            browser_command=browser_command,
+            browser_frames=page.count if page else 0,
+            browser_fps=page.fps if page else cfg.fps,
+        )
 
     timeline = build(cfg.pacing)
     if cfg.duration:
@@ -189,6 +241,11 @@ def _audio_args(cfg: ReelConfig, timeline: Timeline, tmp: Path, seed: int) -> Li
 
 def render_reel(cfg: ReelConfig) -> ReelResult:
     """Render the reel described by `cfg` to `cfg.output`."""
+    with tempfile.TemporaryDirectory(prefix="reel-") as tmp:
+        return _render(cfg, Path(tmp))
+
+
+def _render(cfg: ReelConfig, tmp: Path) -> ReelResult:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg and not cfg.preview:
         raise RuntimeError("ffmpeg is required for reel mode; please install it.")
@@ -198,6 +255,9 @@ def render_reel(cfg: ReelConfig) -> ReelResult:
     script = cfg.script.replace("\r\n", "\n").expandtabs(4).rstrip()
     filename = cfg.filename or (cfg.script_path.name if cfg.script_path else None)
     filename = filename or _default_filename(script)
+    use_browser = cfg.browser
+    if use_browser is None:
+        use_browser = Path(filename).suffix.lower() in BROWSER_EXTENSIONS
 
     theme = get_theme(cfg.theme)
     if cfg.prompt:
@@ -207,11 +267,25 @@ def render_reel(cfg: ReelConfig) -> ReelResult:
     layout = compute_layout(cfg.size[0], cfg.size[1], cfg.font_size, mono)
     logger.info("Terminal is %d columns x %d rows", layout.cols, layout.rows)
 
-    command, chunks, timed_out, exit_code = _collect_output(
-        cfg, script + "\n", filename, layout.cols, layout.rows
-    )
+    page = None
+    if use_browser:
+        page = _capture(cfg, script + "\n", filename, layout, tmp)
+        command, chunks, timed_out, exit_code = None, [], False, None
+    else:
+        command, chunks, timed_out, exit_code = _collect_output(
+            cfg, script + "\n", filename, layout.cols, layout.rows
+        )
     timeline = _build_timeline(
-        cfg, theme, layout.rows, script, filename, command, chunks, timed_out, seed
+        cfg,
+        theme,
+        layout.rows,
+        script,
+        filename,
+        command,
+        chunks,
+        timed_out,
+        seed,
+        page,
     )
     renderer = FrameRenderer(
         theme,
@@ -225,6 +299,9 @@ def render_reel(cfg: ReelConfig) -> ReelResult:
         mono_path=mono,
         mono_bold_path=None if cfg.font else find_font("monospace:bold"),
         title_font_path=find_font("sans:bold"),
+        ui_font_path=find_font("sans"),
+        capture=page,
+        url=_page_url(theme, filename),
     )
 
     times = [t for t, _ in timeline.keyframes]
@@ -247,71 +324,63 @@ def render_reel(cfg: ReelConfig) -> ReelResult:
     output.parent.mkdir(parents=True, exist_ok=True)
 
     if cfg.preview:
-        # Partway through typing: shows the editor with highlighted code
-        t = timeline.duration * 0.45
+        # Partway through typing (editor with highlighted code), or the live page
+        if page is not None:
+            t = timeline.duration - cfg.browser_duration * 0.5
+        else:
+            t = timeline.duration * 0.45
         idx, _ = frame_at(t)
         img = renderer.render(timeline.keyframes[idx][1], True)
         renderer.draw_progress(img, t / timeline.duration)
         img.save(output)
         return ReelResult(output, timeline.duration, 1, exit_code)
 
-    with tempfile.TemporaryDirectory(prefix="reel-") as tmp:
-        cmd = [
-            ffmpeg,
-            "-y",
-            "-loglevel",
-            "error",
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "rgb24",
-            "-s",
-            f"{layout.width}x{layout.height}",
-            "-r",
-            str(cfg.fps),
-            "-i",
-            "-",
-        ]
-        cmd += _audio_args(cfg, timeline, Path(tmp), seed)
-        cmd += [
-            "-c:v", "libx264", "-preset", cfg.preset, "-crf", str(cfg.crf),
-            "-pix_fmt", "yuv420p", "-r", str(cfg.fps),
-            "-t", f"{timeline.duration:.3f}",
-            "-movflags", "+faststart",
-            str(output),
-        ]  # fmt: skip
-        logger.debug("ffmpeg command: %s", " ".join(cmd))
-        stderr_path = Path(tmp) / "ffmpeg.log"
-        with open(stderr_path, "wb") as stderr:
-            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=stderr)
-            cache_key, cached = None, None
-            started = time.monotonic()
-            try:
-                for f in range(total_frames):
-                    t = f / cfg.fps
-                    key = frame_at(t)
-                    if key != cache_key:
-                        cached = renderer.render(timeline.keyframes[key[0]][1], key[1])
-                        cache_key = key
-                    img = cached.copy()
-                    renderer.draw_progress(img, t / timeline.duration)
-                    proc.stdin.write(img.tobytes())
-                    if f and f % (cfg.fps * 10) == 0:
-                        logger.info(
-                            "Rendered %d/%d frames (%.0f%%, %.1fs elapsed)",
-                            f,
-                            total_frames,
-                            100 * f / total_frames,
-                            time.monotonic() - started,
-                        )
-                proc.stdin.close()
-            except BrokenPipeError:
-                pass
-            code = proc.wait()
-        if code != 0:
-            raise RuntimeError(
-                f"ffmpeg failed ({code}): {stderr_path.read_text(errors='replace')[-2000:]}"
-            )
+    cmd = [
+        ffmpeg, "-y", "-loglevel", "error",
+        "-f", "rawvideo", "-pix_fmt", "rgb24",
+        "-s", f"{layout.width}x{layout.height}", "-r", str(cfg.fps),
+        "-i", "-",
+    ]  # fmt: skip
+    cmd += _audio_args(cfg, timeline, tmp, seed)
+    cmd += [
+        "-c:v", "libx264", "-preset", cfg.preset, "-crf", str(cfg.crf),
+        "-pix_fmt", "yuv420p", "-r", str(cfg.fps),
+        "-t", f"{timeline.duration:.3f}",
+        "-movflags", "+faststart",
+        str(output),
+    ]  # fmt: skip
+    logger.debug("ffmpeg command: %s", " ".join(cmd))
+    stderr_path = tmp / "ffmpeg.log"
+    with open(stderr_path, "wb") as stderr:
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=stderr)
+        cache_key, cached = None, None
+        started = time.monotonic()
+        try:
+            for f in range(total_frames):
+                t = f / cfg.fps
+                key = frame_at(t)
+                if key != cache_key:
+                    cached = renderer.render(timeline.keyframes[key[0]][1], key[1])
+                    cache_key = key
+                img = cached.copy()
+                renderer.draw_progress(img, t / timeline.duration)
+                proc.stdin.write(img.tobytes())
+                if f and f % (cfg.fps * 10) == 0:
+                    logger.info(
+                        "Rendered %d/%d frames (%.0f%%, %.1fs elapsed)",
+                        f,
+                        total_frames,
+                        100 * f / total_frames,
+                        time.monotonic() - started,
+                    )
+            proc.stdin.close()
+        except BrokenPipeError:
+            pass
+        code = proc.wait()
+    if code != 0:
+        raise RuntimeError(
+            f"ffmpeg failed ({code}): {stderr_path.read_text(errors='replace')[-2000:]}"
+        )
 
     logger.info("Wrote %s (%.1fs)", output, timeline.duration)
     return ReelResult(output, timeline.duration, total_frames, exit_code)

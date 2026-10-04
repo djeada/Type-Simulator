@@ -7,12 +7,13 @@ from type_simulator.type_simulator import Mode
 from type_simulator.text_typer.parser import CommandParser
 
 
-def validate_inputs(mode, file_path, editor_cmd, text, music=None):
+def validate_inputs(mode, file_path, editor_cmd, text, music=None, browser=False):
     """
     Validate CLI inputs and text for Type-Simulator.
 
     ``mode`` may be a :class:`Mode` or its string value (as passed by the CLI).
-    ``music`` is only checked in reel mode ('builtin', 'none' or a file path).
+    ``music`` is only checked in reel mode ('builtin', 'none' or a file path),
+    as is ``browser`` (whether the reel opens the file in a browser).
     Returns (is_valid, errors: list[str], warnings: list[str])
     """
     errors = []
@@ -40,6 +41,11 @@ def validate_inputs(mode, file_path, editor_cmd, text, music=None):
         if music and music.lower() not in ("builtin", "none"):
             if not Path(music).expanduser().is_file():
                 errors.append(f"Music file not found: {music}")
+        if browser:
+            from type_simulator.reel.browser import INSTALL_HINT, playwright_available
+
+            if not playwright_available():
+                errors.append(INSTALL_HINT)
         # The script is typed verbatim, so macros aren't parsed here
         if not text:
             errors.append("Input text is empty")

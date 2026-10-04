@@ -125,6 +125,18 @@ def print_stats(
             print("  🐢 Speed Rating: Careful & Deliberate")
 
 
+def _reel_uses_browser(args) -> bool:
+    """Whether a reel opens its file in a browser (flag, or by file extension)."""
+    if args.browser is not None:
+        return args.browser
+    from pathlib import Path
+
+    from type_simulator.reel.browser import BROWSER_EXTENSIONS
+
+    name = args.filename or args.input or ""
+    return Path(name).suffix.lower() in BROWSER_EXTENSIONS
+
+
 def run_reel(args, text: str, pacing_values=None) -> None:
     """Render a reel video from parsed CLI arguments and exit on failure."""
     from pathlib import Path
@@ -178,6 +190,10 @@ def run_reel(args, text: str, pacing_values=None) -> None:
         key_volume=args.key_volume,
         seed=args.seed,
         preview=args.preview,
+        browser=args.browser,
+        browser_command=args.browser_cmd,
+        browser_duration=args.browser_duration,
+        browser_zoom=args.browser_zoom,
     )
     try:
         result = render_reel(config)
@@ -266,6 +282,7 @@ def main() -> None:
             args.editor_script,
             text,
             music=args.music if args.mode == "reel" else None,
+            browser=args.mode == "reel" and _reel_uses_browser(args),
         )
         for w in warnings:
             logging.warning(f"Validation warning: {w}")
