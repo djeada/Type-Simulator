@@ -20,6 +20,7 @@ from type_simulator.reel.themes import RGB, Theme
 
 SHELL = "shell"
 EDITOR = "editor"
+BROWSER = "browser"
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,7 @@ class Scene:
     typed: int = 0  # editor: number of script characters typed so far
     status: Tuple[Run, ...] = ()  # editor: bottom status line
     status_cursor: bool = False  # editor: cursor sits in the status line
+    frame: int = -1  # browser: index of the captured page frame
 
 
 @dataclass
@@ -77,7 +79,15 @@ class TimelineBuilder:
         run_command: Optional[str],
         output_chunks: Optional[Sequence[Tuple[float, str]]],
         timed_out: bool = False,
+        browser_command: Optional[str] = None,
+        browser_frames: int = 0,
+        browser_fps: int = 30,
     ) -> Timeline:
+        """
+        With `browser_command`, the saved file is opened in a browser instead
+        of being run: the reel cuts to `browser_frames` captured page frames,
+        which also cover the closing hold.
+        """
         p = self.pacing
         self._prompt()
         self._emit_shell()
@@ -129,7 +139,18 @@ class TimelineBuilder:
             self._prompt()
             self._emit_shell()
 
-        self.t += p.end_hold
+        if browser_command and browser_frames:
+            self.t += 0.5
+            self._type_shell(browser_command)
+            self._press_enter()
+            self.t += 0.4  # the browser window opening
+            start = self.t
+            for i in range(browser_frames):
+                self.t = start + i / browser_fps
+                self.timeline.keyframes.append((self.t, Scene(BROWSER, frame=i)))
+            self.t = start + browser_frames / browser_fps
+        else:
+            self.t += p.end_hold
         self.timeline.duration = self.t
         return self.timeline
 
@@ -196,7 +217,11 @@ class TimelineBuilder:
         prev = 0.0
         frame_mode = False
         for real_t, text in chunks:
-            self.t += min(max(0.0, real_t - prev), p.max_output_gap)
+            gap = max(0.0, real_t - prev)
+            if frame_mode and gap > 0.015:
+                # The program paused, so what it printed so far is complete
+                self._emit_shell()
+            self.t += min(gap, p.max_output_gap)
             prev = real_t
             if frame_mode or SCREEN_RESET_RE.search(text):
                 # Full-screen animation: show each frame once it is complete,

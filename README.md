@@ -9,6 +9,7 @@
 ## 🆕 What's New in v2.2.0
 
 - **🎬 Reel Mode**: Render vertical videos for Reels/Shorts/TikTok: your script is typed into vim, saved, executed for real, with keyboard sounds and a generated royalty-free soundtrack (see [Reel Mode](#5-reel-mode---mode-reel))
+- **🌐 Web page reels**: HTML/JS files are typed in vim and then shown live in a browser window, recorded frame-perfectly with headless Chromium
 - **Macros in Direct Mode**: `{REPEAT}`, `{LOOP}`, `{COUNTER}`, `{DATE}`, `{NL}`, `{TAB}`, variables etc. are now expanded when writing to a file (keys, mouse actions and waits are ignored)
 - **Profile Pauses**: Profiles now add their micro-pauses between words, not just speed and variance
 - **Counter Actions Fixed**: `{COUNTER_name_init_5}`, `{COUNTER_name_get}` etc. are parsed correctly
@@ -76,7 +77,7 @@
   - `xterm` - Terminal emulator (default)
   - `xdotool` - X11 automation tool
   - `xfonts-base` - Basic X11 fonts
-- **For reel mode**: `ffmpeg` (no display needed)
+- **For reel mode**: `ffmpeg` (no display needed); for HTML/JS reels also [Playwright](https://playwright.dev/python/) with Chromium
 
 ## 📦 Installation
 
@@ -279,6 +280,20 @@ python -m src.main --mode reel --input hack.py --output frame.png --title "Test"
 | `--size`, `--fps`, `--font`, `--font-size` | Video format and typography (e.g. `--size 1080x1080` for square) |
 | `--seed` | Reproducible typing rhythm and music |
 | `--preview` | Write one PNG frame instead of the video |
+| `--browser` / `--no-browser` | Open the saved file in a browser window instead of running it (default for `.html`, `.htm`, `.svg`) |
+| `--browser-cmd` | Command typed to open the page, `{file}` = file name (default `firefox {file}`) |
+| `--browser-duration` | Seconds of live page shown at the end (default 10) |
+| `--browser-zoom` | Page zoom; above 1 the page renders larger, like on a phone |
+
+#### Web pages: HTML + JS reels
+
+For `.html` files the reel types the page in vim, saves it, types `firefox page.html` and cuts to a browser window (tab, address bar, live page) showing the page running. The page is recorded in headless Chromium with a paused clock that advances exactly one video frame at a time, so `requestAnimationFrame`/timer animations come out perfectly smooth no matter how heavy they are.
+
+```bash
+pip install playwright && python -m playwright install chromium-headless-shell  # once
+python -m src.main --mode reel --input plasma.html --output plasma.mp4 \
+    --title "Plasma in vanilla JS" --footer "@yourhandle" --duration 40 --browser-duration 12
+```
 
 > ⚠️ The script really runs on your machine (in its own directory, with a timeout). Use `--fake-output` or `--no-run` for anything you don't want executed.
 
