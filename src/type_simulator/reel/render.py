@@ -94,14 +94,15 @@ def compute_layout(
     mono_path: Optional[str],
     split: bool = False,
 ) -> Layout:
-    """Window geometry; `split` stacks the editor above a preview window."""
+    """Window geometry; `split` puts a preview window above the editor."""
     scale = width / 1080
     portrait = height >= width
     side = int(54 * scale)
     preview = None
     if split and portrait:
-        top, bottom = int(height * 0.15), int(height * 0.525)
-        preview = (side, int(height * 0.545), width - side, int(height * 0.905))
+        # The result is the star: a large preview on top, the code below it
+        preview = (side, int(height * 0.13), width - side, int(height * 0.585))
+        top, bottom = int(height * 0.605), int(height * 0.905)
     elif split:
         # Side by side: editor left, preview right
         top, bottom = int(height * 0.2), int(height * 0.9)
@@ -243,14 +244,15 @@ class FrameRenderer:
             region = img.crop(box)
             img.paste(ImageChops.multiply(region, self._scanlines), box[:2])
         if self.latex is not None and self.layout.preview:
-            self._draw_document(img, draw, scene.preview)
+            self._draw_document(img, draw, scene)
         return img
 
-    def _draw_document(self, img, draw, index: int) -> None:
+    def _draw_document(self, img, draw, scene) -> None:
         """Paste the live document preview and its page indicator."""
         box = preview_viewport(self.layout)
-        img.paste(self.latex.image(index), box[:2], self._doc_mask)
-        label = self.latex.label(index)
+        view = self.latex.view(scene.preview, scene.preview_from, round(scene.morph, 2))
+        img.paste(view, box[:2], self._doc_mask)
+        label = self.latex.label(scene.preview)
         if label:
             x0, y0, x1, _ = self.layout.preview
             font = _load_font(self.ui_font_path, int(22 * self.layout.scale))
@@ -441,6 +443,7 @@ class FrameRenderer:
         th, lay = self.theme, self.layout
         x0, y0, x1, y1 = lay.window
         if lay.preview:
+            y0 = min(y0, lay.preview[1])
             y1 = max(y1, lay.preview[3])
         if title:
             self._draw_wrapped(
@@ -565,7 +568,7 @@ class FrameRenderer:
         glow_color = th.accent if th.scanlines else (0, 0, 0)
         img.paste(Image.new("RGB", img.size, glow_color), (0, 0), glow)
         draw = ImageDraw.Draw(img)
-        draw.rounded_rectangle((x0, y0, x1, y1), radius=radius, fill=(255, 255, 255))
+        draw.rounded_rectangle((x0, y0, x1, y1), radius=radius, fill=th.window_bg)
         draw.rounded_rectangle(
             (x0, y0, x1, y0 + lay.titlebar_h), radius=radius, fill=th.titlebar_bg
         )

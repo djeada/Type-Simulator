@@ -315,7 +315,12 @@ def _render(cfg: ReelConfig, tmp: Path) -> ReelResult:
         x0, y0, x1, y1 = preview_viewport(layout)
         texinputs = cfg.script_path.parent.resolve() if cfg.script_path else None
         latex = build_preview(
-            script, (x1 - x0, y1 - y0), tmp / "preview", cfg.latex_engine, texinputs
+            script,
+            (x1 - x0, y1 - y0),
+            tmp / "preview",
+            cfg.latex_engine,
+            texinputs,
+            colors=(theme.window_bg, theme.fg, theme.accent),
         )
     page = None
     if use_browser:

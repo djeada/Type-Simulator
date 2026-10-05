@@ -109,12 +109,22 @@ def _ink_box(img: Image.Image) -> Optional[Tuple[int, int, int, int]]:
     return gray.getbbox()
 
 
+RGB = Tuple[int, int, int]
+
+
+def _has_body(page: Image.Image) -> bool:
+    """Whether a page has ink outside its bottom margin (the page number)."""
+    body = page.crop((0, 0, page.width, int(page.height * 0.9)))
+    return _ink_box(body) is not None
+
+
 @dataclass
 class Snapshot:
     image: Path  # last page, cropped to the text width and scaled to the pane
     page: int
     pages: int
-    focus: int  # y of the lowest ink on the page, followed by the preview
+    focus: int = 0  # y of the newest content, followed by the preview
+    changed: Optional[Tuple[int, int, int, int]] = None  # what this update added
 
 
 @dataclass
@@ -123,13 +133,19 @@ class LatexPreview:
     snapshots: List[Snapshot] = field(default_factory=list)
     # (characters typed, snapshot index) once that prefix compiles
     checkpoints: List[Tuple[int, int]] = field(default_factory=list)
+    background: RGB = (255, 255, 255)
+    accent: RGB = (255, 200, 0)
+
+    def view(self, index: int, previous: int = -1, morph: float = 1.0) -> Image.Image:
+        """
+        The pane contents for snapshot `index`. While `morph` goes from 0 to 1
+        after an update, the view scrolls smoothly from where `previous` was
+        and what was just added glows in the accent color, then fades.
+        """
+        return _view(self, index, previous, morph)
 
     def image(self, index: int) -> Image.Image:
-        if index < 0 or not self.snapshots:
-            return Image.new("RGB", self.size, (255, 255, 255))
-        return _view(
-            self.snapshots[index].image, self.snapshots[index].focus, self.size
-        )
+        return self.view(index)
 
     def label(self, index: int) -> str:
         if index < 0 or not self.snapshots:
@@ -137,22 +153,79 @@ class LatexPreview:
         snap = self.snapshots[index]
         return f"page {snap.page}/{snap.pages}"
 
+    def _top(self, snap: Snapshot, page_height: int) -> int:
+        h = self.size[1]
+        return max(0, min(snap.focus - int(h * 0.72), page_height - h))
 
-@lru_cache(maxsize=8)
-def _view(path: Path, focus: int, size: Tuple[int, int]) -> Image.Image:
-    """The part of the page shown in the pane: follows the newest content."""
-    w, h = size
-    with Image.open(path) as page:
-        page = page.convert("RGB")
-    top = max(0, min(focus - int(h * 0.72), page.height - h))
-    view = Image.new("RGB", size, (255, 255, 255))
+    def __hash__(self) -> int:  # cached by identity
+        return id(self)
+
+
+def _ease(x: float) -> float:
+    return 1 - (1 - x) ** 3
+
+
+@lru_cache(maxsize=16)
+def _page(path: Path) -> Image.Image:
+    with Image.open(path) as img:
+        return img.convert("RGB")
+
+
+@lru_cache(maxsize=32)
+def _view(
+    preview: LatexPreview, index: int, previous: int, morph: float
+) -> Image.Image:
+    w, h = preview.size
+    view = Image.new("RGB", (w, h), preview.background)
+    if index < 0 or not preview.snapshots:
+        return view
+    snap = preview.snapshots[index]
+    page = _page(snap.image)
+    top = preview._top(snap, page.height)
+    if 0 <= previous < len(preview.snapshots) and morph < 1:
+        before = preview.snapshots[previous]
+        if before.page == snap.page:
+            start = preview._top(before, _page(before.image).height)
+            top = round(start + (top - start) * _ease(morph))
     view.paste(page.crop((0, top, w, min(page.height, top + h))), (0, 0))
+    # Highlight new content; a reflow of the whole page isn't worth a flash
+    if snap.changed and morph < 1 and snap.changed[3] - snap.changed[1] < 0.45 * h:
+        x0, y0, x1, y1 = snap.changed
+        pad = 8
+        box = (
+            max(0, x0 - pad),
+            max(0, y0 - top - pad),
+            min(w, x1 + pad),
+            min(h, y1 - top + pad),
+        )
+        if box[1] < box[3] and box[0] < box[2]:
+            strength = 0.32 * (1 - _ease(morph))
+            region = view.crop(box)
+            glow = Image.blend(
+                region, Image.new("RGB", region.size, preview.accent), strength
+            )
+            view.paste(glow, box[:2])
     return view
+
+
+def recolor(img: Image.Image, background: RGB, foreground: RGB) -> Image.Image:
+    """
+    Dark-mode a page: invert lightness but keep hues (a red curve stays red,
+    black text turns light), then map black/white onto the theme's colors.
+    """
+    inverted = ImageOps.invert(img.convert("RGB"))
+    h, sat, val = inverted.convert("HSV").split()
+    h = h.point(lambda v: (v + 128) % 256)  # undo the hue flip of the inversion
+    restored = Image.merge("HSV", (h, sat, val)).convert("RGB")
+    lut = []
+    for bg, fg in zip(background, foreground):
+        lut.extend(round(bg + (fg - bg) * i / 255) for i in range(256))
+    return restored.point(lut)
 
 
 def _set_focus(snapshots: List[Snapshot]) -> None:
     """
-    Point each snapshot at what just changed: the lowest row that differs from
+    Point each snapshot at what just changed: the region that differs from
     the previous snapshot of the same page. That's the newly typed content,
     and unlike the lowest ink it isn't fooled by the page number in the footer.
     """
@@ -172,7 +245,7 @@ def _set_focus(snapshots: List[Snapshot]) -> None:
                 .getbbox()
             )
             if box:
-                focus = box[3]
+                focus, snap.changed = box[3], box
             else:
                 focus = previous[2]
         if focus is None:
@@ -180,6 +253,7 @@ def _set_focus(snapshots: List[Snapshot]) -> None:
             body = current.crop((0, 0, current.width, int(current.height * 0.9)))
             box = ImageOps.invert(body).point(lambda v: 255 if v > 24 else 0).getbbox()
             focus = box[3] if box else 0
+            snap.changed = box
         snap.focus = focus
         previous = (snap.page, current, focus)
 
@@ -195,13 +269,19 @@ def build_preview(
     out_dir: Path,
     engine: str = "pdflatex",
     texinputs: Optional[Path] = None,
+    colors: Optional[Tuple[RGB, RGB, RGB]] = None,
 ) -> LatexPreview:
-    """Compile every line-end prefix of `script` and rasterize the results."""
+    """
+    Compile every line-end prefix of `script` and rasterize the results.
+    `colors` = (background, text, accent) recolors pages to match the theme.
+    """
     missing = tools_available(engine)
     if missing:
         raise RuntimeError(f"LaTeX preview needs: {', '.join(missing)}")
     out_dir.mkdir(parents=True, exist_ok=True)
     preview = LatexPreview(size)
+    if colors:
+        preview.background, _, preview.accent = colors
     ends = [i + 1 for i, ch in enumerate(script) if ch == "\n"] + [len(script)]
     sources: Dict[int, str] = {}
     for pos in ends:
@@ -236,25 +316,31 @@ def build_preview(
             box = _ink_box(img)
             if box:
                 boxes.append((box[0] / img.width, box[2] / img.width))
-        left = max(0.0, min(b[0] for b in boxes) - 0.04) if boxes else 0.0
-        right = min(1.0, max(b[1] for b in boxes) + 0.04) if boxes else 1.0
+        left = max(0.0, min(b[0] for b in boxes) - 0.025) if boxes else 0.0
+        right = min(1.0, max(b[1] for b in boxes) + 0.025) if boxes else 1.0
 
         def rasterize(job):
             index, pdf = job
             pages = _page_count(pdf)
+            page = pages
             try:
-                probe = _rasterize(pdf, pages, 72, Path(tmp) / f"size{index}")
+                probe = _rasterize(pdf, page, 72, Path(tmp) / f"size{index}")
+                # A float pushed alone onto a new page leaves it blank for now:
+                # keep showing the page before, where the writing is
+                if page > 1 and not _has_body(probe):
+                    page -= 1
+                    probe = _rasterize(pdf, page, 72, Path(tmp) / f"size{index}")
             except subprocess.CalledProcessError:
                 return None  # e.g. an empty document
             dpi = 72 * size[0] / ((right - left) * probe.width)
-            img = _rasterize(pdf, pages, dpi, Path(tmp) / f"page{index}")
+            img = _rasterize(pdf, page, dpi, Path(tmp) / f"page{index}")
             img = img.crop(
                 (round(left * img.width), 0, round(right * img.width), img.height)
             )
             img = img.resize((size[0], round(img.height * size[0] / img.width)))
             path = out_dir / f"{index:04d}.png"
             img.save(path)
-            return Snapshot(path, pages, pages, 0)
+            return Snapshot(path, page, pages)
 
         with ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as pool:
             shots = list(pool.map(rasterize, enumerate(compiled.values())))
@@ -264,6 +350,11 @@ def build_preview(
                 index_of[src] = len(preview.snapshots)
                 preview.snapshots.append(shot)
         _set_focus(preview.snapshots)
+        if colors:
+            for snap in preview.snapshots:
+                with Image.open(snap.image) as img:
+                    dark = recolor(img, colors[0], colors[1])
+                dark.save(snap.image)
 
     last = -1
     for pos in ends:

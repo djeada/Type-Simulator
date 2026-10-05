@@ -376,12 +376,14 @@ def test_timeline_updates_preview_after_checkpoints():
     assert tl.keyframes[-1][1].preview == 1
 
 
-def test_split_layout_stacks_preview_under_editor():
+def test_split_layout_puts_result_above_code():
     from type_simulator.reel.render import compute_layout, find_font, preview_viewport
 
     lay = compute_layout(1080, 1920, None, find_font("monospace"), split=True)
     assert lay.preview is not None
-    assert lay.window[3] < lay.preview[1]
+    assert lay.preview[3] < lay.window[1]
+    # The result gets more room than the code
+    assert lay.preview[3] - lay.preview[1] > lay.window[3] - lay.window[1]
     x0, y0, x1, y1 = preview_viewport(lay)
     assert y0 > lay.preview[1] and x1 - x0 > 900
     assert compute_layout(1080, 1920, None, None).preview is None
@@ -439,3 +441,35 @@ def test_build_preview_compiles_line_by_line(tmp_path):
     assert all(p.image.exists() for p in preview.snapshots)
     assert preview.image(len(preview.snapshots) - 1).size == (300, 200)
     assert preview.label(0) == "page 1/1"
+
+
+def test_recolor_matches_theme_and_keeps_hues():
+    from PIL import Image
+
+    from type_simulator.reel.latex import recolor
+
+    bg, fg = (46, 52, 64), (216, 222, 233)
+    page = Image.new("RGB", (3, 1), (255, 255, 255))
+    page.putpixel((1, 0), (0, 0, 0))
+    page.putpixel((2, 0), (255, 0, 0))
+    dark = recolor(page, bg, fg)
+    assert dark.getpixel((0, 0)) == bg  # paper becomes the editor background
+    assert dark.getpixel((1, 0)) == fg  # ink becomes the editor text color
+    r, g, b = dark.getpixel((2, 0))
+    assert r > 150 and g < 100 and b < 100  # red stays red
+
+
+def test_preview_view_glows_new_content_then_settles(tmp_path):
+    from PIL import Image
+
+    from type_simulator.reel.latex import LatexPreview, Snapshot
+
+    page = tmp_path / "p.png"
+    Image.new("RGB", (100, 300), (0, 0, 0)).save(page)
+    shot = Snapshot(page, 1, 1, focus=150, changed=(10, 120, 90, 150))
+    preview = LatexPreview((100, 80), [shot, shot], accent=(255, 200, 0))
+    fresh = preview.view(1, 0, 0.0)
+    settled = preview.view(1, 0, 1.0)
+    inside = (50, 150 - (150 - int(80 * 0.72)))  # changed area, in view coords
+    assert fresh.getpixel(inside)[0] > settled.getpixel(inside)[0]
+    assert settled.getpixel(inside) == (0, 0, 0)
