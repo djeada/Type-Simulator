@@ -9,6 +9,7 @@
 ## 🆕 What's New in v2.2.0
 
 - **🎬 Reel Mode**: Render vertical videos for Reels/Shorts/TikTok: your script is typed into vim, saved, executed for real, with keyboard sounds and a generated royalty-free soundtrack (see [Reel Mode](#5-reel-mode---mode-reel))
+- **📄 LaTeX reels**: `.tex` files are typed above a live PDF preview that recompiles after every line
 - **🌐 Web page reels**: HTML/JS files are typed in vim and then shown live in a browser window, recorded frame-perfectly with headless Chromium
 - **Macros in Direct Mode**: `{REPEAT}`, `{LOOP}`, `{COUNTER}`, `{DATE}`, `{NL}`, `{TAB}`, variables etc. are now expanded when writing to a file (keys, mouse actions and waits are ignored)
 - **Profile Pauses**: Profiles now add their micro-pauses between words, not just speed and variance
@@ -77,7 +78,7 @@
   - `xterm` - Terminal emulator (default)
   - `xdotool` - X11 automation tool
   - `xfonts-base` - Basic X11 fonts
-- **For reel mode**: `ffmpeg` (no display needed); for HTML/JS reels also [Playwright](https://playwright.dev/python/) with Chromium
+- **For reel mode**: `ffmpeg` (no display needed); for HTML/JS reels also [Playwright](https://playwright.dev/python/) with Chromium; for LaTeX reels a TeX distribution and poppler-utils
 
 ## 📦 Installation
 
@@ -284,6 +285,19 @@ python -m src.main --mode reel --input hack.py --output frame.png --title "Test"
 | `--browser-cmd` | Command typed to open the page, `{file}` = file name (default `firefox {file}`) |
 | `--browser-duration` | Seconds of live page shown at the end (default 10) |
 | `--browser-zoom` | Page zoom; above 1 the page renders larger, like on a phone |
+| `--no-live-preview` | For `.tex` files, don't show the live PDF preview |
+| `--latex-engine` | `pdflatex` (default), `xelatex` or `lualatex` for the preview and the final compile |
+
+#### LaTeX with a live PDF preview
+
+For `.tex` files the screen splits: vim on top, a PDF viewer below that recompiles after every line, like Overleaf or vimtex. Each partial document is made compilable by closing whatever is still open (environments, braces, `$`/`\[` math), all line states are compiled in parallel up front, and the preview scrolls to follow what was just added. Lines that don't compile yet keep the previous preview, just like a real live preview. After `:wq` the shell runs the real `pdflatex`.
+
+```bash
+python -m src.main --mode reel --input demo/reel/equations.tex --output equations.mp4 \
+    --title "Five equations that changed the world" --theme nord --duration 60
+```
+
+Tip: a phone-sized page (e.g. `\usepackage[paperwidth=12cm, paperheight=18cm, margin=1cm]{geometry}`) makes the text in the preview much larger. Needs `pdflatex` (or `--latex-engine xelatex/lualatex`) and poppler's `pdftoppm`/`pdfinfo`; `--no-live-preview` turns the preview off.
 
 #### Web pages: HTML + JS reels
 

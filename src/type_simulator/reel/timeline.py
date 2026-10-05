@@ -31,6 +31,9 @@ class Scene:
     status: Tuple[Run, ...] = ()  # editor: bottom status line
     status_cursor: bool = False  # editor: cursor sits in the status line
     frame: int = -1  # browser: index of the captured page frame
+    preview: int = -1  # live document preview: snapshot index (-1 = blank)
+    preview_from: int = -1  # the snapshot shown before the latest update
+    morph: float = 1.0  # 0..1 progress of the transition from preview_from
 
 
 @dataclass
@@ -62,7 +65,14 @@ class TimelineBuilder:
         pacing: Pacing,
         rows: int,
         seed: Optional[int] = None,
+        preview_checkpoints: Sequence[Tuple[int, int]] = (),
+        preview_delay: float = 0.4,
     ):
+        """
+        `preview_checkpoints` are (characters typed, snapshot) pairs for a live
+        document preview, which updates `preview_delay` seconds after the
+        checkpoint is typed, like a recompile would.
+        """
         self.theme = theme
         self.pacing = pacing
         self.rows = rows
@@ -70,6 +80,12 @@ class TimelineBuilder:
         self.t = 0.0
         self.timeline = Timeline()
         self.term = TerminalBuffer(theme.ansi)
+        self.checkpoints = list(preview_checkpoints)
+        self.preview_delay = preview_delay
+        self.preview = -1
+        self.preview_from = -1
+        self._changed_at: Optional[float] = None
+        self._pending: List[Tuple[float, int]] = []
 
     # ------------------------------------------------------------------ #
     def build(
@@ -107,8 +123,11 @@ class TimelineBuilder:
         self._type_editor(script, insert)
         self.timeline.typing_time = self.t - start
 
-        # Save and quit
-        self.t += 0.5
+        # Save and quit (with a live preview, linger on the finished result)
+        self._hold(
+            1.6 if self.checkpoints or self._pending or self.preview >= 0 else 0.5,
+            lambda: self._emit_editor(len(script), insert),
+        )
         self._emit_editor(len(script), (), status_cursor=True)
         typed = ""
         for ch in ":wq":
@@ -120,8 +139,9 @@ class TimelineBuilder:
         self.t += 0.12
         lines = script.count("\n") + (0 if script.endswith("\n") else 1)
         written = f'"{filename}" {lines}L, {len(script.encode())}B written'
-        self._emit_editor(len(script), ((written, self.theme.fg, False),))
-        self.t += 0.6
+        saved = ((written, self.theme.fg, False),)
+        self._emit_editor(len(script), saved)
+        self._hold(0.6, lambda: self._emit_editor(len(script), saved))
 
         # Back to the shell (the line after `vim <file>` is still empty)
         self._prompt()
@@ -164,12 +184,59 @@ class TimelineBuilder:
         self.term.write("# " if user.startswith("root") else "$ ", th.fg)
 
     def _emit_shell(self) -> None:
-        scene = Scene(SHELL, shell=self.term.snapshot(self.rows))
+        self._sync_preview()
+        scene = Scene(
+            SHELL, shell=self.term.snapshot(self.rows), **self._preview_state()
+        )
         self.timeline.keyframes.append((self.t, scene))
 
     def _emit_editor(self, typed: int, status, status_cursor: bool = False) -> None:
-        scene = Scene(EDITOR, typed=typed, status=status, status_cursor=status_cursor)
+        self._sync_preview()
+        scene = Scene(
+            EDITOR,
+            typed=typed,
+            status=status,
+            status_cursor=status_cursor,
+            **self._preview_state(),
+        )
         self.timeline.keyframes.append((self.t, scene))
+
+    PREVIEW_TRANSITION = 0.6  # seconds of smooth scroll and highlight
+
+    def _sync_preview(self) -> None:
+        while self._pending and self._pending[0][0] <= self.t:
+            ready, snapshot = self._pending.pop(0)
+            if snapshot != self.preview:
+                self.preview_from, self.preview = self.preview, snapshot
+                self._changed_at = ready
+
+    def _preview_state(self) -> dict:
+        morph = 1.0
+        if self._changed_at is not None:
+            morph = min(1.0, (self.t - self._changed_at) / self.PREVIEW_TRANSITION)
+        return {
+            "preview": self.preview,
+            "preview_from": self.preview_from,
+            "morph": morph,
+        }
+
+    def _hold(self, seconds: float, emit) -> None:
+        """Wait, adding frames while a preview transition is still playing."""
+        end = self.t + seconds
+        step = 1 / 30
+        while self.t + step < end:
+            self._sync_preview()
+            if self._preview_state()["morph"] >= 1 and not self._pending:
+                break
+            self.t += step
+            emit()
+        self.t = end
+
+    def _reach(self, typed: int) -> None:
+        """Schedule preview updates for checkpoints up to `typed` characters."""
+        while self.checkpoints and self.checkpoints[0][0] <= typed:
+            _, snapshot = self.checkpoints.pop(0)
+            self._pending.append((self.t + self.preview_delay, snapshot))
 
     def _sound(self, kind: str, at: Optional[float] = None) -> None:
         self.timeline.sounds.append((self.t if at is None else at, kind))
@@ -210,6 +277,7 @@ class TimelineBuilder:
                     i += 1
             else:
                 self._sound("space" if ch == " " else "key")
+            self._reach(i)
             self._emit_editor(i, status)
 
     def _play_output(self, chunks: Sequence[Tuple[float, str]]) -> None:

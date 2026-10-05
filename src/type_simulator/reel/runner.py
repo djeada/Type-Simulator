@@ -48,6 +48,7 @@ COMPILERS = {
     ".cc": "g++ {file} -o {stem} && ./{stem}",
     ".rs": "rustc {file} -o {stem} && ./{stem}",
     ".go": "go run {file}",
+    ".tex": "pdflatex -interaction=nonstopmode {file}",
 }
 
 
@@ -87,6 +88,7 @@ def run_script(
     timeout: float,
     columns: int,
     rows: int,
+    extra_env: Optional[dict] = None,
 ) -> RunResult:
     """
     Execute `command` in `cwd`, capturing stdout+stderr chunks with timestamps.
@@ -103,6 +105,7 @@ def run_script(
             "CLICOLOR_FORCE": "1",
         }
     )
+    env.update(extra_env or {})
     logger.info("Running script: %s (cwd=%s)", command, cwd)
     result = RunResult()
     start = time.monotonic()
