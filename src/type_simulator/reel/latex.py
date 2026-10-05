@@ -210,8 +210,9 @@ def _view(
 
 def recolor(img: Image.Image, background: RGB, foreground: RGB) -> Image.Image:
     """
-    Dark-mode a page: invert lightness but keep hues (a red curve stays red,
-    black text turns light), then map black/white onto the theme's colors.
+    Dark-mode a page: paper becomes the theme background and black ink its
+    text color (lightness inverted, hue kept), while saturated colors in
+    figures are left as they are.
     """
     inverted = ImageOps.invert(img.convert("RGB"))
     h, sat, val = inverted.convert("HSV").split()
@@ -220,7 +221,12 @@ def recolor(img: Image.Image, background: RGB, foreground: RGB) -> Image.Image:
     lut = []
     for bg, fg in zip(background, foreground):
         lut.extend(round(bg + (fg - bg) * i / 255) for i in range(256))
-    return restored.point(lut)
+    themed = restored.point(lut)
+    # Colored figure elements keep their original, bright colors: inverting
+    # a light blue bar would turn it into navy that vanishes on a dark page
+    saturation = img.convert("RGB").convert("HSV").getchannel("S")
+    keep = saturation.point(lambda v: max(0, min(255, (v - 80) * 4)))
+    return Image.composite(img.convert("RGB"), themed, keep)
 
 
 def _set_focus(snapshots: List[Snapshot]) -> None:

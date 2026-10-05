@@ -455,8 +455,7 @@ def test_recolor_matches_theme_and_keeps_hues():
     dark = recolor(page, bg, fg)
     assert dark.getpixel((0, 0)) == bg  # paper becomes the editor background
     assert dark.getpixel((1, 0)) == fg  # ink becomes the editor text color
-    r, g, b = dark.getpixel((2, 0))
-    assert r > 150 and g < 100 and b < 100  # red stays red
+    assert dark.getpixel((2, 0)) == (255, 0, 0)  # figure colors stay bright
 
 
 def test_preview_view_glows_new_content_then_settles(tmp_path):
