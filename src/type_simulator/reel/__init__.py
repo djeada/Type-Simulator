@@ -1,7 +1,8 @@
 """
 Reel mode: render a vertical video (Reels / Shorts / TikTok) of a script being
 typed into vim in a terminal, saved, executed, with key clicks and music.
-Web pages (.html) are opened in a browser window instead, showing the live page.
+Web pages (.html) are opened in a browser window instead, showing the live page,
+and LaTeX (.tex) is typed next to a live PDF preview that updates line by line.
 
 Frames are drawn with Pillow and encoded with ffmpeg, so no display, terminal
 emulator or screen recorder is needed.
@@ -21,11 +22,13 @@ from typing import List, Optional, Tuple
 
 from type_simulator.reel import audio
 from type_simulator.reel.browser import BROWSER_EXTENSIONS, PageCapture, capture_page
+from type_simulator.reel.latex import LATEX_EXTENSIONS, build_preview
 from type_simulator.reel.render import (
     FrameRenderer,
     browser_viewport,
     compute_layout,
     find_font,
+    preview_viewport,
 )
 from type_simulator.reel.runner import (
     RunResult,
@@ -83,6 +86,9 @@ class ReelConfig:
     browser_command: Optional[str] = None  # shown in the shell; {file} = filename
     browser_duration: float = 10.0  # seconds of live page before the closing hold
     browser_zoom: float = 1.0  # >1 renders the page larger (smaller CSS viewport)
+    # Live PDF preview next to the editor for LaTeX files
+    live_preview: bool = True
+    latex_engine: str = "pdflatex"
 
 
 @dataclass
@@ -102,22 +108,33 @@ def _default_filename(script: str) -> str:
     return "hack.sh"
 
 
+def _default_command(cfg: ReelConfig, filename: str, script: str) -> str:
+    if Path(filename).suffix.lower() in LATEX_EXTENSIONS:
+        return f"{cfg.latex_engine} -interaction=nonstopmode {{file}}"
+    return default_run_command(filename, script)
+
+
 def _collect_output(cfg: ReelConfig, script: str, filename: str, cols: int, rows: int):
     """Return (command shown, output chunks, timed_out, exit_code)."""
     if cfg.fake_output is not None:
-        command = (cfg.run_command or default_run_command(filename, script)).format(
+        command = (cfg.run_command or _default_command(cfg, filename, script)).format(
             file=filename
         )
         return command, [(0.0, cfg.fake_output)], False, None
     if not cfg.run:
         return None, [], False, None
 
-    command = (cfg.run_command or default_run_command(filename, script)).format(
+    command = (cfg.run_command or _default_command(cfg, filename, script)).format(
         file=filename
     )
     path = cfg.script_path
+    extra_env = None
+    latex = Path(filename).suffix.lower() in LATEX_EXTENSIONS
+    if latex and path and path.is_file():
+        # Compile a copy, so the user's folder doesn't fill with .aux/.log files
+        extra_env = {"TEXINPUTS": f"{path.parent.resolve()}:"}
     with tempfile.TemporaryDirectory(prefix="reel-run-") as tmp:
-        if path and path.is_file() and path.name == filename:
+        if path and path.is_file() and path.name == filename and not latex:
             cwd = path.parent
         else:
             cwd = Path(tmp)
@@ -126,7 +143,12 @@ def _collect_output(cfg: ReelConfig, script: str, filename: str, cols: int, rows
             if script.startswith("#!"):
                 path.chmod(0o755)
         result: RunResult = run_script(
-            exec_command(command, path, script), cwd, cfg.run_timeout, cols, rows
+            exec_command(command, path, script),
+            cwd,
+            cfg.run_timeout,
+            cols,
+            rows,
+            extra_env=extra_env,
         )
     return command, result.chunks, result.timed_out, result.exit_code
 
@@ -157,7 +179,17 @@ def _capture(
 
 
 def _build_timeline(
-    cfg, theme, rows, script, filename, command, chunks, timed_out, seed, page=None
+    cfg,
+    theme,
+    rows,
+    script,
+    filename,
+    command,
+    chunks,
+    timed_out,
+    seed,
+    page=None,
+    latex=None,
 ):
     browser_command = None
     if page is not None:
@@ -166,7 +198,13 @@ def _build_timeline(
         )
 
     def build(pacing: Pacing) -> Timeline:
-        builder = TimelineBuilder(theme, pacing, rows, seed=seed)
+        builder = TimelineBuilder(
+            theme,
+            pacing,
+            rows,
+            seed=seed,
+            preview_checkpoints=latex.checkpoints if latex else (),
+        )
         return builder.build(
             script,
             filename,
@@ -258,15 +296,27 @@ def _render(cfg: ReelConfig, tmp: Path) -> ReelResult:
     use_browser = cfg.browser
     if use_browser is None:
         use_browser = Path(filename).suffix.lower() in BROWSER_EXTENSIONS
+    use_latex = (
+        cfg.live_preview
+        and not use_browser
+        and Path(filename).suffix.lower() in LATEX_EXTENSIONS
+    )
 
     theme = get_theme(cfg.theme)
     if cfg.prompt:
         theme = dataclasses.replace(theme, prompt=cfg.prompt)
 
     mono = cfg.font or find_font("monospace")
-    layout = compute_layout(cfg.size[0], cfg.size[1], cfg.font_size, mono)
+    layout = compute_layout(cfg.size[0], cfg.size[1], cfg.font_size, mono, use_latex)
     logger.info("Terminal is %d columns x %d rows", layout.cols, layout.rows)
 
+    latex = None
+    if use_latex:
+        x0, y0, x1, y1 = preview_viewport(layout)
+        texinputs = cfg.script_path.parent.resolve() if cfg.script_path else None
+        latex = build_preview(
+            script, (x1 - x0, y1 - y0), tmp / "preview", cfg.latex_engine, texinputs
+        )
     page = None
     if use_browser:
         page = _capture(cfg, script + "\n", filename, layout, tmp)
@@ -286,6 +336,7 @@ def _render(cfg: ReelConfig, tmp: Path) -> ReelResult:
         timed_out,
         seed,
         page,
+        latex,
     )
     renderer = FrameRenderer(
         theme,
@@ -302,6 +353,8 @@ def _render(cfg: ReelConfig, tmp: Path) -> ReelResult:
         ui_font_path=find_font("sans"),
         capture=page,
         url=_page_url(theme, filename),
+        latex=latex,
+        preview_title=f"{Path(filename).stem}.pdf",
     )
 
     times = [t for t, _ in timeline.keyframes]

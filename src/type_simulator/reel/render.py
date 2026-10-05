@@ -83,19 +83,37 @@ class Layout:
     line_h: int
     cols: int
     rows: int
+    # Second window under the editor (live document preview), if any
+    preview: Optional[Tuple[int, int, int, int]] = None
 
 
 def compute_layout(
-    width: int, height: int, font_size: Optional[int], mono_path: Optional[str]
+    width: int,
+    height: int,
+    font_size: Optional[int],
+    mono_path: Optional[str],
+    split: bool = False,
 ) -> Layout:
+    """Window geometry; `split` stacks the editor above a preview window."""
     scale = width / 1080
     portrait = height >= width
     side = int(54 * scale)
-    if portrait:
+    preview = None
+    if split and portrait:
+        top, bottom = int(height * 0.15), int(height * 0.525)
+        preview = (side, int(height * 0.545), width - side, int(height * 0.905))
+    elif split:
+        # Side by side: editor left, preview right
+        top, bottom = int(height * 0.2), int(height * 0.9)
+        mid = width // 2
+        preview = (mid + side // 4, top, width - side, bottom)
+        width_editor = mid - side // 4
+    elif portrait:
         top, bottom = int(height * 0.19), int(height * 0.86)
     else:
         top, bottom = int(height * 0.2), int(height * 0.9)
-    window = (side, top, width - side, bottom)
+    right = width_editor if split and not portrait else width - side
+    window = (side, top, right, bottom)
     titlebar_h = int(64 * scale)
     pad = int(26 * scale)
     content = (
@@ -122,7 +140,14 @@ def compute_layout(
         line_h,
         cols,
         rows,
+        preview,
     )
+
+
+def preview_viewport(layout: Layout) -> Tuple[int, int, int, int]:
+    """Box of the document area inside the preview window."""
+    x0, y0, x1, y1 = layout.preview
+    return (x0, y0 + layout.titlebar_h, x1, y1)
 
 
 def browser_chrome_heights(layout: Layout) -> Tuple[int, int]:
@@ -169,6 +194,8 @@ class FrameRenderer:
         ui_font_path: Optional[str] = None,
         capture=None,
         url: Optional[str] = None,
+        latex=None,
+        preview_title: Optional[str] = None,
     ):
         self.theme = theme
         self.layout = layout
@@ -180,6 +207,8 @@ class FrameRenderer:
         self.title_font_path = title_font_path
         self.ui_font_path = ui_font_path or title_font_path
         self.capture = capture
+        self.latex = latex
+        self.preview_title = preview_title or "Preview"
         total_lines = script.count("\n") + 1
         self.gutter = len(str(total_lines)) + 1
         self.code_cols = layout.cols - self.gutter - 1
@@ -191,6 +220,9 @@ class FrameRenderer:
             page = (capture.title or filename, url or filename)
             self._bases[BROWSER] = self._base(page[0], title, subtitle, footer, page)
             self._page_mask = self._window_mask().crop(browser_viewport(layout))
+        if latex is not None and layout.preview:
+            box = preview_viewport(layout)
+            self._doc_mask = self._window_mask(layout.preview).crop(box)
         self._scanlines = self._scanline_mask() if theme.scanlines else None
         self._cursor_line_bg = _mix(theme.window_bg, theme.fg, 0.07)
 
@@ -210,7 +242,25 @@ class FrameRenderer:
             box = self.layout.content
             region = img.crop(box)
             img.paste(ImageChops.multiply(region, self._scanlines), box[:2])
+        if self.latex is not None and self.layout.preview:
+            self._draw_document(img, draw, scene.preview)
         return img
+
+    def _draw_document(self, img, draw, index: int) -> None:
+        """Paste the live document preview and its page indicator."""
+        box = preview_viewport(self.layout)
+        img.paste(self.latex.image(index), box[:2], self._doc_mask)
+        label = self.latex.label(index)
+        if label:
+            x0, y0, x1, _ = self.layout.preview
+            font = _load_font(self.ui_font_path, int(22 * self.layout.scale))
+            draw.text(
+                (x1 - int(26 * self.layout.scale), y0 + self.layout.titlebar_h // 2),
+                label,
+                font=font,
+                fill=self.theme.titlebar_fg,
+                anchor="rm",
+            )
 
     def draw_progress(self, img: Image.Image, progress: float) -> None:
         lay = self.layout
@@ -354,6 +404,8 @@ class FrameRenderer:
         glow = glow.filter(ImageFilter.GaussianBlur(int(30 * lay.scale)))
         glow_color = th.accent if th.scanlines else (0, 0, 0)
         img.paste(Image.new("RGB", (W, H), glow_color), (0, 0), glow)
+        if lay.preview and self.latex is not None:
+            self._draw_preview_window(img)
 
         draw = ImageDraw.Draw(img)
         draw.rounded_rectangle((x0, y0, x1, y1), radius=radius, fill=th.window_bg)
@@ -388,6 +440,8 @@ class FrameRenderer:
     def _draw_texts(self, draw, title, subtitle, footer) -> None:
         th, lay = self.theme, self.layout
         x0, y0, x1, y1 = lay.window
+        if lay.preview:
+            y1 = max(y1, lay.preview[3])
         if title:
             self._draw_wrapped(
                 draw, title, int(66 * lay.scale), th.title_fg, y0, subtitle
@@ -489,13 +543,48 @@ class FrameRenderer:
             fill=color,
         )
 
-    def _window_mask(self) -> Image.Image:
+    def _window_mask(self, rect=None) -> Image.Image:
         lay = self.layout
         mask = Image.new("L", (lay.width, lay.height), 0)
         ImageDraw.Draw(mask).rounded_rectangle(
-            lay.window, radius=int(26 * lay.scale), fill=255
+            rect or lay.window, radius=int(26 * lay.scale), fill=255
         )
         return mask
+
+    def _draw_preview_window(self, img: Image.Image) -> None:
+        """Second window, a document viewer, below (or beside) the editor."""
+        th, lay = self.theme, self.layout
+        x0, y0, x1, y1 = lay.preview
+        s = lay.scale
+        radius = int(26 * s)
+        glow = Image.new("L", img.size, 0)
+        ImageDraw.Draw(glow).rounded_rectangle(
+            (x0 - 6, y0 - 6, x1 + 6, y1 + 6), radius=radius, fill=150
+        )
+        glow = glow.filter(ImageFilter.GaussianBlur(int(30 * s)))
+        glow_color = th.accent if th.scanlines else (0, 0, 0)
+        img.paste(Image.new("RGB", img.size, glow_color), (0, 0), glow)
+        draw = ImageDraw.Draw(img)
+        draw.rounded_rectangle((x0, y0, x1, y1), radius=radius, fill=(255, 255, 255))
+        draw.rounded_rectangle(
+            (x0, y0, x1, y0 + lay.titlebar_h), radius=radius, fill=th.titlebar_bg
+        )
+        draw.rectangle(
+            (x0, y0 + lay.titlebar_h - radius, x1, y0 + lay.titlebar_h),
+            fill=th.titlebar_bg,
+        )
+        r, cy = int(11 * s), y0 + lay.titlebar_h // 2
+        for i, color in enumerate(_TRAFFIC_LIGHTS):
+            cx = x0 + int(36 * s) + i * int(36 * s)
+            draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=color)
+        font = _load_font(self.title_font_path, int(24 * s))
+        draw.text(
+            ((x0 + x1) // 2, cy),
+            self.preview_title,
+            font=font,
+            fill=th.titlebar_fg,
+            anchor="mm",
+        )
 
     def _draw_wrapped(self, draw, title, size, color, window_top, subtitle) -> None:
         lay = self.layout

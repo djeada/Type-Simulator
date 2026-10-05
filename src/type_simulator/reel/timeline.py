@@ -31,6 +31,7 @@ class Scene:
     status: Tuple[Run, ...] = ()  # editor: bottom status line
     status_cursor: bool = False  # editor: cursor sits in the status line
     frame: int = -1  # browser: index of the captured page frame
+    preview: int = -1  # live document preview: snapshot index (-1 = blank)
 
 
 @dataclass
@@ -62,7 +63,14 @@ class TimelineBuilder:
         pacing: Pacing,
         rows: int,
         seed: Optional[int] = None,
+        preview_checkpoints: Sequence[Tuple[int, int]] = (),
+        preview_delay: float = 0.4,
     ):
+        """
+        `preview_checkpoints` are (characters typed, snapshot) pairs for a live
+        document preview, which updates `preview_delay` seconds after the
+        checkpoint is typed, like a recompile would.
+        """
         self.theme = theme
         self.pacing = pacing
         self.rows = rows
@@ -70,6 +78,10 @@ class TimelineBuilder:
         self.t = 0.0
         self.timeline = Timeline()
         self.term = TerminalBuffer(theme.ansi)
+        self.checkpoints = list(preview_checkpoints)
+        self.preview_delay = preview_delay
+        self.preview = -1
+        self._pending: List[Tuple[float, int]] = []
 
     # ------------------------------------------------------------------ #
     def build(
@@ -164,12 +176,30 @@ class TimelineBuilder:
         self.term.write("# " if user.startswith("root") else "$ ", th.fg)
 
     def _emit_shell(self) -> None:
-        scene = Scene(SHELL, shell=self.term.snapshot(self.rows))
+        self._sync_preview()
+        scene = Scene(SHELL, shell=self.term.snapshot(self.rows), preview=self.preview)
         self.timeline.keyframes.append((self.t, scene))
 
     def _emit_editor(self, typed: int, status, status_cursor: bool = False) -> None:
-        scene = Scene(EDITOR, typed=typed, status=status, status_cursor=status_cursor)
+        self._sync_preview()
+        scene = Scene(
+            EDITOR,
+            typed=typed,
+            status=status,
+            status_cursor=status_cursor,
+            preview=self.preview,
+        )
         self.timeline.keyframes.append((self.t, scene))
+
+    def _sync_preview(self) -> None:
+        while self._pending and self._pending[0][0] <= self.t:
+            self.preview = self._pending.pop(0)[1]
+
+    def _reach(self, typed: int) -> None:
+        """Schedule preview updates for checkpoints up to `typed` characters."""
+        while self.checkpoints and self.checkpoints[0][0] <= typed:
+            _, snapshot = self.checkpoints.pop(0)
+            self._pending.append((self.t + self.preview_delay, snapshot))
 
     def _sound(self, kind: str, at: Optional[float] = None) -> None:
         self.timeline.sounds.append((self.t if at is None else at, kind))
@@ -210,6 +240,7 @@ class TimelineBuilder:
                     i += 1
             else:
                 self._sound("space" if ch == " " else "key")
+            self._reach(i)
             self._emit_editor(i, status)
 
     def _play_output(self, chunks: Sequence[Tuple[float, str]]) -> None:

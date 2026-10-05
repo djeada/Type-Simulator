@@ -137,6 +137,20 @@ def _reel_uses_browser(args) -> bool:
     return Path(name).suffix.lower() in BROWSER_EXTENSIONS
 
 
+def _reel_uses_live_preview(args) -> bool:
+    """Whether a reel shows a live LaTeX preview (by file extension)."""
+    from pathlib import Path
+
+    from type_simulator.reel.latex import LATEX_EXTENSIONS
+
+    name = args.filename or args.input or ""
+    return (
+        not args.no_live_preview
+        and not _reel_uses_browser(args)
+        and Path(name).suffix.lower() in LATEX_EXTENSIONS
+    )
+
+
 def run_reel(args, text: str, pacing_values=None) -> None:
     """Render a reel video from parsed CLI arguments and exit on failure."""
     from pathlib import Path
@@ -194,6 +208,8 @@ def run_reel(args, text: str, pacing_values=None) -> None:
         browser_command=args.browser_cmd,
         browser_duration=args.browser_duration,
         browser_zoom=args.browser_zoom,
+        live_preview=not args.no_live_preview,
+        latex_engine=args.latex_engine,
     )
     try:
         result = render_reel(config)
@@ -283,6 +299,11 @@ def main() -> None:
             text,
             music=args.music if args.mode == "reel" else None,
             browser=args.mode == "reel" and _reel_uses_browser(args),
+            latex_engine=(
+                args.latex_engine
+                if args.mode == "reel" and _reel_uses_live_preview(args)
+                else None
+            ),
         )
         for w in warnings:
             logging.warning(f"Validation warning: {w}")

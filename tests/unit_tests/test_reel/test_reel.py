@@ -335,3 +335,107 @@ def test_capture_page_advances_animation_frame_by_frame(tmp_path):
     assert all(f.size == (200, 120) for f in frames)
     # The square moves 10 px per 100 ms frame
     assert ImageChops.difference(frames[0], frames[1]).getbbox() is not None
+
+
+# ─────────────────────────── LaTeX live preview ───────────────────────────
+def test_complete_prefix_closes_what_is_open():
+    from type_simulator.reel.latex import complete_prefix
+
+    assert complete_prefix("\\documentclass{article}\n") is None
+    doc = "\\documentclass{article}\n\\begin{document}\n\\begin{align}\n  x &= \\frac{1}{2\n"
+    out = complete_prefix(doc)
+    assert out.endswith("}\n\\end{align}\n\\end{document}\n")
+    assert "\n\n" not in out[len(doc) - 1 :]  # no paragraph break inside math
+    assert complete_prefix("\\begin{document}\nSee $x").endswith("$\n\\end{document}\n")
+    assert complete_prefix("\\begin{document}\n\\[ y\n").endswith(
+        "\\]\n\\end{document}\n"
+    )
+    # Escaped characters and comments don't count
+    assert complete_prefix("\\begin{document}\n50\\% \\$ \\{ % {\n").endswith(
+        "\\end{document}\n"
+    )
+    full = "\\begin{document}\nHi\n\\end{document}\n"
+    assert complete_prefix(full) == full
+
+
+def test_timeline_updates_preview_after_checkpoints():
+    builder = TimelineBuilder(
+        THEME, Pacing(), rows=20, seed=1, preview_checkpoints=[(3, 0), (19, 1)]
+    )
+    tl = builder.build("ab\ncdefghijklmnop\nh", "a.tex", None, [])
+    editor = [(t, s.preview) for t, s in tl.keyframes if s.mode == EDITOR]
+    seen = [p for _, p in editor]
+    assert seen[0] == -1 and seen[-1] == 1
+    assert seen == sorted(seen)  # never goes back
+    first_update = next(t for t, p in editor if p == 0)
+    typed_newline = next(
+        t for t, s in tl.keyframes if s.mode == EDITOR and s.typed >= 3
+    )
+    assert first_update - typed_newline >= 0.4 - 1e-9  # recompile delay
+    # The shell afterwards keeps showing the final document
+    assert tl.keyframes[-1][1].preview == 1
+
+
+def test_split_layout_stacks_preview_under_editor():
+    from type_simulator.reel.render import compute_layout, find_font, preview_viewport
+
+    lay = compute_layout(1080, 1920, None, find_font("monospace"), split=True)
+    assert lay.preview is not None
+    assert lay.window[3] < lay.preview[1]
+    x0, y0, x1, y1 = preview_viewport(lay)
+    assert y0 > lay.preview[1] and x1 - x0 > 900
+    assert compute_layout(1080, 1920, None, None).preview is None
+
+
+def test_renderer_shows_latex_preview(tmp_path):
+    from PIL import Image
+
+    from type_simulator.reel.latex import LatexPreview, Snapshot
+    from type_simulator.reel.render import (
+        FrameRenderer,
+        compute_layout,
+        find_font,
+        preview_viewport,
+    )
+    from type_simulator.reel.timeline import Scene
+
+    lay = compute_layout(540, 960, None, find_font("monospace"), split=True)
+    x0, y0, x1, y1 = preview_viewport(lay)
+    page = tmp_path / "p.png"
+    Image.new("RGB", (x1 - x0, 2000), (0, 128, 0)).save(page)
+    preview = LatexPreview((x1 - x0, y1 - y0), [Snapshot(page, 2, 3, 1500)], [(1, 0)])
+    renderer = FrameRenderer(THEME, lay, "x", [None], "a.tex", latex=preview)
+    center = ((x0 + x1) // 2, (y0 + y1) // 2)
+    blank = renderer.render(Scene(EDITOR, preview=-1), False)
+    shown = renderer.render(Scene(EDITOR, preview=0), False)
+    assert blank.getpixel(center) == (255, 255, 255)
+    assert shown.getpixel(center)[1] > 100 and shown.getpixel(center)[0] < 50
+    assert preview.label(0) == "page 2/3"
+
+
+def test_tex_files_compile_with_chosen_engine():
+    from type_simulator.reel import ReelConfig, _default_command
+
+    cfg = ReelConfig(output="x.mp4", script="", latex_engine="xelatex")
+    assert _default_command(cfg, "a.tex", "").startswith("xelatex ")
+    assert _default_command(cfg, "a.py", "") == "python3 a.py"
+
+
+@pytest.mark.skipif(
+    shutil.which("pdflatex") is None or shutil.which("pdftoppm") is None,
+    reason="pdflatex/poppler not installed",
+)
+def test_build_preview_compiles_line_by_line(tmp_path):
+    from type_simulator.reel.latex import build_preview
+
+    script = (
+        "\\documentclass{article}\n\\begin{document}\nHello\n\n"
+        "\\[\n  e^{i\\pi} + 1 = 0\n\\]\n\nWorld\n\\end{document}"
+    )
+    preview = build_preview(script, (300, 200), tmp_path)
+    positions = [pos for pos, _ in preview.checkpoints]
+    assert positions == sorted(positions) and len(positions) >= 3
+    assert positions[-1] == len(script)
+    assert all(p.image.exists() for p in preview.snapshots)
+    assert preview.image(len(preview.snapshots) - 1).size == (300, 200)
+    assert preview.label(0) == "page 1/1"

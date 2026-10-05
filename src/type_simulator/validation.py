@@ -7,13 +7,16 @@ from type_simulator.type_simulator import Mode
 from type_simulator.text_typer.parser import CommandParser
 
 
-def validate_inputs(mode, file_path, editor_cmd, text, music=None, browser=False):
+def validate_inputs(
+    mode, file_path, editor_cmd, text, music=None, browser=False, latex_engine=None
+):
     """
     Validate CLI inputs and text for Type-Simulator.
 
     ``mode`` may be a :class:`Mode` or its string value (as passed by the CLI).
     ``music`` is only checked in reel mode ('builtin', 'none' or a file path),
-    as is ``browser`` (whether the reel opens the file in a browser).
+    as is ``browser`` (whether the reel opens the file in a browser) and
+    ``latex_engine`` (set when the reel shows a live LaTeX preview).
     Returns (is_valid, errors: list[str], warnings: list[str])
     """
     errors = []
@@ -46,6 +49,12 @@ def validate_inputs(mode, file_path, editor_cmd, text, music=None, browser=False
 
             if not playwright_available():
                 errors.append(INSTALL_HINT)
+        if latex_engine:
+            from type_simulator.reel.latex import tools_available
+
+            missing = tools_available(latex_engine)
+            if missing:
+                errors.append(f"LaTeX live preview needs: {', '.join(missing)}")
         # The script is typed verbatim, so macros aren't parsed here
         if not text:
             errors.append("Input text is empty")

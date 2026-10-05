@@ -65,6 +65,10 @@ Examples:
   python -m src.main --mode reel --input hack.py --output reel.mp4 \
       --title "Hacking the mainframe" --footer "@me" --duration 30
 
+  # LaTeX reel: the PDF preview under the editor updates after every line
+  python -m src.main --mode reel --input paper.tex --output paper.mp4 \
+      --title "LaTeX, compiled live" --duration 60
+
   # Web page reel: type the HTML in vim, then show it live in a browser window
   python -m src.main --mode reel --input plasma.html --output plasma.mp4 \
       --title "Plasma in vanilla JS" --browser-duration 12
@@ -359,6 +363,17 @@ For more information, visit: https://github.com/djeada/Type-Simulator
             type=float,
             default=10.0,
             help="Seconds of live page shown before the ending (default: 10).",
+        )
+        reel.add_argument(
+            "--no-live-preview",
+            action="store_true",
+            help="For .tex files, don't show the live PDF preview under the editor.",
+        )
+        reel.add_argument(
+            "--latex-engine",
+            default="pdflatex",
+            choices=["pdflatex", "xelatex", "lualatex"],
+            help="TeX engine for the live preview (default: pdflatex).",
         )
         reel.add_argument(
             "--browser-zoom",
